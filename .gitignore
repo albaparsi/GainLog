@@ -22,3 +22,42 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# Coverage
+coverage
+.nyc_output
+
+# Build outputs
+build
+.svelte-kit
+
+# Cache
+.cache
+.parcel-cache
+vite.config.timestamp-* 
+
+# Dependency audit / reports
+report.*.json
+
+# Misc
+*.tgz
+*.orig
+*.rej
+
+# Mac
+.AppleDouble
+.LSOverride
+
+# Node REPL history
+.node_repl_history
+
+# TypeScript incremental
+*.tsbuildinfo
+
+# Local SSL certs
+*.pem
