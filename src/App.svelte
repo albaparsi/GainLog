@@ -1,4 +1,3 @@
-
 <script>
   import { onMount } from 'svelte';
   let page = 'home';
@@ -370,6 +369,26 @@
   .theme-circle:hover { transform: scale(1.08); }
   .theme-circle.active { border:3px solid #000; }
   .nav-btn.active { background:#000; color:#fff; }
+  /* Enlarged calendar */
+  .calendar-wrapper { max-width: 880px; margin: 2rem auto 0; }
+  .calendar-grid { display:grid; grid-template-columns: repeat(7, 110px); gap:12px; justify-content:center; }
+  .calendar-head { font-weight:600; text-align:center; font-size:0.9rem; }
+  .cal-cell { height:110px; width:110px; border:2px solid #555; background: var(--color-panel); border-radius:14px; display:flex; flex-direction:column; justify-content:flex-start; align-items:flex-start; padding:8px 10px; gap:6px; cursor:pointer; font-size:0.95rem; font-weight:500; transition: background .2s, transform .15s, box-shadow .2s; }
+  .cal-cell:hover { background: var(--color-row); }
+  .cal-cell.selected { background: var(--color-accent); color:#fff; box-shadow:0 4px 10px rgba(0,0,0,0.15); }
+  .cal-day-number { font-size:1.3rem; font-weight:600; line-height:1; color:#333; }
+  .cal-cell.selected .cal-day-number { color:#fff; }
+  /* marker style reserved (currently unused) */
+  @media (max-width: 900px) {
+    .calendar-grid { grid-template-columns: repeat(7, 1fr); gap:6px; }
+    .cal-cell { height:70px; width:100%; padding:6px 6px; border-radius:10px; }
+  /* marker small */
+  }
+  .exercise-table { display:grid; grid-template-columns: 1.3fr 0.6fr 0.6fr 0.8fr 0.8fr; align-items:center; gap:0.75rem; }
+  .exercise-header { font-weight:700; font-size:0.85rem; }
+  .exercise-row { background:#f7f7f7; padding:0.3rem 0.5rem; border-radius:4px; }
+  .exercise-row.submitted { background:#ececec; }
+  .exercise-row input, .exercise-row select { width:100%; }
 </style>
 
 <!-- Global Theme / Nav -->
@@ -434,36 +453,29 @@
     </div>
     {#if !selectedDate}
       <div>
-        <div class="exercise-header-row">
-          <span class="exercise-label">Exercise</span>
-          <span>Set(s)</span>
-          <span>Rep(s)</span>
-          <span>Weight</span>
-          <span></span>
+        <div class="exercise-table exercise-header">
+          <div>Exercise</div>
+          <div>Set(s)</div>
+          <div>Rep(s)</div>
+          <div>Weight</div>
+          <div></div>
         </div>
         {#each exercises as ex, idx}
           {#if !ex.submitted}
-            <div class="exercise-input-row">
-              <input type="text" placeholder="Exercise name" bind:value={exercises[idx].name} on:keydown={(e) => e.key === 'Enter' && submitExerciseRow(idx)} />
-              <select class="dropdown" bind:value={exercises[idx].sets}>
-                {#each setsOptions as n}
-                  <option value={n}>{n}</option>
-                {/each}
-              </select>
-              <select class="dropdown" bind:value={exercises[idx].reps}>
-                {#each repsOptions as n}
-                  <option value={n}>{n}</option>
-                {/each}
-              </select>
-              <input type="text" placeholder="Weight" style="width:60px;" bind:value={exercises[idx].weight} on:keydown={(e) => e.key === 'Enter' && submitExerciseRow(idx)} />
-              <button on:click={() => submitExerciseRow(idx)}>Submit</button>
+            <div class="exercise-table exercise-row">
+              <div><input type="text" placeholder="Exercise name" bind:value={exercises[idx].name} on:keydown={(e) => e.key === 'Enter' && submitExerciseRow(idx)} /></div>
+              <div><select class="dropdown" bind:value={exercises[idx].sets}>{#each setsOptions as n}<option value={n}>{n}</option>{/each}</select></div>
+              <div><select class="dropdown" bind:value={exercises[idx].reps}>{#each repsOptions as n}<option value={n}>{n}</option>{/each}</select></div>
+              <div><input type="text" placeholder="Weight" bind:value={exercises[idx].weight} on:keydown={(e) => e.key === 'Enter' && submitExerciseRow(idx)} /></div>
+              <div><button on:click={() => submitExerciseRow(idx)}>Submit</button></div>
             </div>
           {:else}
-            <div class="exercise-list-row row-muted">
-              <span class="exercise-label">{ex.name}</span>
-              <span>{ex.sets}</span>
-              <span>{ex.reps}</span>
-              <span>{ex.weight}</span>
+            <div class="exercise-table exercise-row submitted">
+              <div style="font-weight:600;">{ex.name}</div>
+              <div>{ex.sets}</div>
+              <div>{ex.reps}</div>
+              <div>{ex.weight}</div>
+              <div></div>
             </div>
           {/if}
         {/each}
@@ -486,7 +498,7 @@
 {/if}
 
 {#if page === 'calendar'}
-  <div class="panel" style="margin-top:3rem;">
+  <div class="panel calendar-wrapper">
     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
       <div style="display:flex; gap:0.5rem; align-items:center;">
         <button on:click={prevMonth}>&lt;</button>
@@ -497,19 +509,21 @@
         <div>Selected: {selectedDate}</div>
       {/if}
     </div>
-    <div style="display:grid; grid-template-columns:repeat(7,1fr); gap:4px; margin-top:0.5rem; font-size:0.8rem;">
-      <div style="text-align:center; font-weight:bold;">Sun</div>
-      <div style="text-align:center; font-weight:bold;">Mon</div>
-      <div style="text-align:center; font-weight:bold;">Tue</div>
-      <div style="text-align:center; font-weight:bold;">Wed</div>
-      <div style="text-align:center; font-weight:bold;">Thu</div>
-      <div style="text-align:center; font-weight:bold;">Fri</div>
-      <div style="text-align:center; font-weight:bold;">Sat</div>
+    <div class="calendar-grid" style="margin-top:1rem;">
+      <div class="calendar-head">Sun</div>
+      <div class="calendar-head">Mon</div>
+      <div class="calendar-head">Tue</div>
+      <div class="calendar-head">Wed</div>
+      <div class="calendar-head">Thu</div>
+      <div class="calendar-head">Fri</div>
+      <div class="calendar-head">Sat</div>
       {#each calendarDays as d}
         {#if d === null}
           <div></div>
         {:else}
-          <button on:click={() => selectCalendarDay(d)} style="padding:6px; {selectedDate && Number(selectedDate.slice(-2))===d && new Date(selectedDate).getMonth()===calendarMonth ? 'background: var(--color-accent); color:#fff; border-radius:4px;' : ''}">{d}</button>
+          <button type="button" class="cal-cell {selectedDate && Number(selectedDate.slice(-2))===d && new Date(selectedDate).getMonth()===calendarMonth ? 'selected' : ''}" on:click={() => selectCalendarDay(d)}>
+            <span class="cal-day-number">{d}</span>
+          </button>
         {/if}
       {/each}
     </div>
