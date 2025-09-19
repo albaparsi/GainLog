@@ -9,6 +9,26 @@
   let activeSeconds = 0;
   let activeInterval;
 
+  // Theme handling
+  let theme = 'pink';
+  let showThemePicker = false;
+  const themes = {
+    pink:  { bg: '#ffe4ec', text: '#2d2d2d', accent: '#ff8fb1' },
+    green: { bg: '#e3f9e5', text: '#1f3324', accent: '#5bbf72' },
+    yellow:{ bg: '#fff9d6', text: '#3a3200', accent: '#e0b300' },
+  orange:{ bg: '#ffe9d6', text: '#3b2412', accent: '#ff9a3c' },
+  blue:  { bg: '#e0f2ff', text: '#1e2b36', accent: '#6ab4ff' }
+  };
+
+  function applyTheme(t) {
+    theme = t;
+    const body = document.body;
+    for (const key of Object.keys(themes)) body.classList.remove('theme-' + key);
+    body.classList.add('theme-' + t);
+    localStorage.setItem('ft_theme', t);
+    showThemePicker = false;
+  }
+
   // Tracking page state
   let workoutQuestion = '';
   let workoutInput = '';
@@ -27,7 +47,6 @@
   const API_BASE = 'http://localhost:5174/api';
 
   // Calendar & historical editing state
-  let showCalendar = false;
   let selectedDate = null; // YYYY-MM-DD
   let calendarYear;
   let calendarMonth; // 0-11
@@ -92,11 +111,15 @@
     }
   }
 
-  function openCalendar() {
-    if (!showCalendar) {
+  function goCalendar() {
+    if (page !== 'calendar') {
       initCalendar();
+      page = 'calendar';
     }
-    showCalendar = !showCalendar;
+  }
+
+  function goTracking() {
+    if (page !== 'tracking') page = 'tracking';
   }
 
   function beginEdit(w) {
@@ -218,12 +241,18 @@
     joinDate = d.toLocaleDateString();
     const storedId = localStorage.getItem('ft_user_id');
     const storedName = localStorage.getItem('ft_user_name');
+    const storedTheme = localStorage.getItem('ft_theme');
     if (storedId && storedName) {
       userId = storedId;
       userName = storedName;
       activeSeconds = 0;
       clearInterval(activeInterval);
       activeInterval = setInterval(() => { activeSeconds += 1; }, 1000);
+    }
+    if (storedTheme && themes[storedTheme]) {
+      applyTheme(storedTheme);
+    } else {
+      applyTheme(theme);
     }
   });
 
@@ -331,22 +360,40 @@
   .dropdown {
     min-width: 60px;
   }
-  .logo {
-    height: 6em;
-    padding: 1.5em;
-    will-change: filter;
-    transition: filter 300ms;
-  }
-  .logo:hover {
-    filter: drop-shadow(0 0 2em #646cffaa);
-  }
-  .logo.svelte:hover {
-    filter: drop-shadow(0 0 2em #ff3e00aa);
-  }
-  .read-the-docs {
-    color: #888;
-  }
+  /* Removed unused original template selectors (.logo, .read-the-docs) */
+  /* Theme switcher */
+  .theme-switcher { position: fixed; top: 10px; left: 10px; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; z-index: 1000; }
+  .theme-btn { padding: 0.4rem 0.9rem; background: transparent; color: #000; font-size: 0.85rem; border:1px solid #000; border-radius:20px; cursor:pointer; transition: background .15s, color .15s; }
+  .theme-btn:hover { background: rgba(0,0,0,0.07); }
+  .theme-circles { display:flex; gap:8px; }
+  .theme-circle { width:28px; height:28px; padding:0; aspect-ratio:1/1; border-radius:50%; cursor:pointer; border:1px solid #000; background: transparent; transition: transform 0.15s, border .15s; display:inline-block; }
+  .theme-circle:hover { transform: scale(1.08); }
+  .theme-circle.active { border:3px solid #000; }
+  .nav-btn.active { background:#000; color:#fff; }
 </style>
+
+<!-- Global Theme / Nav -->
+<div class="theme-switcher">
+  <div style="display:flex; align-items:center; gap:8px;">
+    <button class="theme-btn" on:click={() => showThemePicker = !showThemePicker}>Theme</button>
+    {#if showThemePicker}
+      <div class="theme-circles">
+        {#each Object.keys(themes) as t}
+          <button
+            class="theme-circle {theme===t ? 'active' : ''}"
+            aria-label={"Select theme " + t}
+            style="background:{themes[t].bg};"
+            on:click={() => applyTheme(t)}
+          ></button>
+        {/each}
+      </div>
+    {/if}
+  </div>
+  {#if userName}
+    <button class="theme-btn nav-btn {page==='calendar' ? 'active' : ''}" on:click={goCalendar}>Calendar</button>
+    <button class="theme-btn nav-btn {page==='tracking' ? 'active' : ''}" on:click={goTracking}>Tracker</button>
+  {/if}
+</div>
 
 {#if page === 'home'}
   <div class="header">
@@ -384,7 +431,6 @@
         <input type="text" placeholder="e.g. Chest, Cardio..." bind:value={workoutInput} on:keydown={(e) => e.key === 'Enter' && submitWorkout()} />
         <button on:click={submitWorkout}>Submit</button>
       {/if}
-  <button style="margin-left:1rem;" on:click={openCalendar}>Calendar</button>
     </div>
     {#if !selectedDate}
       <div>
@@ -413,7 +459,7 @@
               <button on:click={() => submitExerciseRow(idx)}>Submit</button>
             </div>
           {:else}
-            <div class="exercise-list-row">
+            <div class="exercise-list-row row-muted">
               <span class="exercise-label">{ex.name}</span>
               <span>{ex.sets}</span>
               <span>{ex.reps}</span>
@@ -424,7 +470,7 @@
         <button style="margin-top:0.5rem;" on:click={addExerciseRow}>Add Row</button>
         <button style="margin-top:0.5rem; margin-left:1rem;" on:click={doneTracking}>Done</button>
         {#if showDonePrompt}
-          <div style="margin-top:1rem; background:#fffbe6; border:1px solid #ffe58f; padding:1rem; border-radius:6px;">
+          <div class="prompt-box" style="margin-top:1rem;">
             <span>Are you done tracking?</span>
             <button style="margin-left:1rem;" on:click={() => confirmDoneTracking(true)}>Yes</button>
             <button style="margin-left:0.5rem;" on:click={() => confirmDoneTracking(false)}>No</button>
@@ -435,88 +481,90 @@
         {/if}
       </div>
     {/if}
-    {#if showCalendar}
-      <div style="margin-top:2rem; border:1px solid #ccc; padding:1rem; border-radius:8px;">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <div style="display:flex; gap:0.5rem; align-items:center;">
-            <button on:click={prevMonth}>&lt;</button>
-            <strong>{new Date(calendarYear, calendarMonth).toLocaleString(undefined,{month:'long', year:'numeric'})}</strong>
-            <button on:click={nextMonth}>&gt;</button>
-          </div>
-          {#if selectedDate}
-            <div>Selected: {selectedDate}</div>
-          {/if}
-        </div>
-        <div style="display:grid; grid-template-columns:repeat(7,1fr); gap:4px; margin-top:0.5rem; font-size:0.8rem;">
-          <div style="text-align:center; font-weight:bold;">Sun</div>
-          <div style="text-align:center; font-weight:bold;">Mon</div>
-            <div style="text-align:center; font-weight:bold;">Tue</div>
-            <div style="text-align:center; font-weight:bold;">Wed</div>
-            <div style="text-align:center; font-weight:bold;">Thu</div>
-            <div style="text-align:center; font-weight:bold;">Fri</div>
-            <div style="text-align:center; font-weight:bold;">Sat</div>
-          {#each calendarDays as d}
-            {#if d === null}
-              <div></div>
-            {:else}
-              <button on:click={() => selectCalendarDay(d)} style="padding:6px; {selectedDate && Number(selectedDate.slice(-2))===d && new Date(selectedDate).getMonth()===calendarMonth ? 'background:#007bff;color:#fff;border-radius:4px;' : ''}">{d}</button>
-            {/if}
-          {/each}
-        </div>
-        {#if selectedDate}
-          <div style="margin-top:1rem;">
-            <h3 style="margin:0 0 0.5rem 0;">Workouts on {selectedDate}</h3>
-            <button on:click={addNewDateWorkoutRow}>Add Workout</button>
-            {#if loadingWorkouts}
-              <div>Loading...</div>
-            {:else if !dateWorkouts.length}
-              <div style="margin-top:0.5rem;">No workouts yet.</div>
-            {/if}
-            {#if dateWorkouts.length}
-              <div style="margin-top:0.5rem;">
-                <div style="display:grid; grid-template-columns: 120px 100px 100px 100px 120px 160px; gap:4px; font-weight:bold; font-size:0.85rem;">
-                  <div>Body Part</div>
-                  <div>Exercise</div>
-                  <div>Sets</div>
-                  <div>Reps</div>
-                  <div>Weight</div>
-                  <div>Actions</div>
-                </div>
-                {#each dateWorkouts as w}
-                  {#if w._editing}
-                    <div style="display:grid; grid-template-columns: 120px 100px 100px 100px 100px 160px; gap:4px; margin-top:4px;">
-                      <input type="text" bind:value={w._draft.body_part} />
-                      <input type="text" bind:value={w._draft.exercise} />
-                      <input type="number" min="0" bind:value={w._draft.sets} />
-                      <input type="number" min="0" bind:value={w._draft.reps} />
-                      <input type="number" step="0.1" bind:value={w._draft.weight} />
-                      {#if w.workout_id}
-                        <div>
-                          <button on:click={() => saveEdit(w)}>Save</button>
-                          <button on:click={() => cancelEdit(w)} style="margin-left:4px;">Cancel</button>
-                        </div>
-                      {:else}
-                        <div>
-                          <button on:click={() => saveNewDateWorkout(w)}>Create</button>
-                          <button on:click={() => cancelEdit(w)} style="margin-left:4px;">Cancel</button>
-                        </div>
-                      {/if}
+    
+  </div>
+{/if}
+
+{#if page === 'calendar'}
+  <div class="panel" style="margin-top:3rem;">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
+      <div style="display:flex; gap:0.5rem; align-items:center;">
+        <button on:click={prevMonth}>&lt;</button>
+        <strong>{new Date(calendarYear, calendarMonth).toLocaleString(undefined,{month:'long', year:'numeric'})}</strong>
+        <button on:click={nextMonth}>&gt;</button>
+      </div>
+      {#if selectedDate}
+        <div>Selected: {selectedDate}</div>
+      {/if}
+    </div>
+    <div style="display:grid; grid-template-columns:repeat(7,1fr); gap:4px; margin-top:0.5rem; font-size:0.8rem;">
+      <div style="text-align:center; font-weight:bold;">Sun</div>
+      <div style="text-align:center; font-weight:bold;">Mon</div>
+      <div style="text-align:center; font-weight:bold;">Tue</div>
+      <div style="text-align:center; font-weight:bold;">Wed</div>
+      <div style="text-align:center; font-weight:bold;">Thu</div>
+      <div style="text-align:center; font-weight:bold;">Fri</div>
+      <div style="text-align:center; font-weight:bold;">Sat</div>
+      {#each calendarDays as d}
+        {#if d === null}
+          <div></div>
+        {:else}
+          <button on:click={() => selectCalendarDay(d)} style="padding:6px; {selectedDate && Number(selectedDate.slice(-2))===d && new Date(selectedDate).getMonth()===calendarMonth ? 'background: var(--color-accent); color:#fff; border-radius:4px;' : ''}">{d}</button>
+        {/if}
+      {/each}
+    </div>
+    {#if selectedDate}
+      <div style="margin-top:1rem;">
+        <h3 style="margin:0 0 0.5rem 0;">Workouts on {selectedDate}</h3>
+        <button on:click={addNewDateWorkoutRow}>Add Workout</button>
+        {#if loadingWorkouts}
+          <div>Loading...</div>
+        {:else if !dateWorkouts.length}
+          <div style="margin-top:0.5rem;">No workouts yet.</div>
+        {/if}
+        {#if dateWorkouts.length}
+          <div style="margin-top:0.5rem;">
+            <div style="display:grid; grid-template-columns: 120px 100px 100px 100px 120px 160px; gap:4px; font-weight:bold; font-size:0.85rem;">
+              <div>Body Part</div>
+              <div>Exercise</div>
+              <div>Sets</div>
+              <div>Reps</div>
+              <div>Weight</div>
+              <div>Actions</div>
+            </div>
+            {#each dateWorkouts as w}
+              {#if w._editing}
+                <div style="display:grid; grid-template-columns: 120px 100px 100px 100px 100px 160px; gap:4px; margin-top:4px;">
+                  <input type="text" bind:value={w._draft.body_part} />
+                  <input type="text" bind:value={w._draft.exercise} />
+                  <input type="number" min="0" bind:value={w._draft.sets} />
+                  <input type="number" min="0" bind:value={w._draft.reps} />
+                  <input type="number" step="0.1" bind:value={w._draft.weight} />
+                  {#if w.workout_id}
+                    <div>
+                      <button on:click={() => saveEdit(w)}>Save</button>
+                      <button on:click={() => cancelEdit(w)} style="margin-left:4px;">Cancel</button>
                     </div>
                   {:else}
-                    <div style="display:grid; grid-template-columns: 120px 100px 100px 100px 100px 160px; gap:4px; margin-top:4px;">
-                      <div>{w.body_part}</div>
-                      <div>{w.exercise}</div>
-                      <div>{w.sets}</div>
-                      <div>{w.reps}</div>
-                      <div>{w.weight}</div>
-                      <div>
-                        <button on:click={() => beginEdit(w)}>Edit</button>
-                      </div>
+                    <div>
+                      <button on:click={() => saveNewDateWorkout(w)}>Create</button>
+                      <button on:click={() => cancelEdit(w)} style="margin-left:4px;">Cancel</button>
                     </div>
                   {/if}
-                {/each}
-              </div>
-            {/if}
+                </div>
+              {:else}
+                <div style="display:grid; grid-template-columns: 120px 100px 100px 100px 100px 160px; gap:4px; margin-top:4px;">
+                  <div>{w.body_part}</div>
+                  <div>{w.exercise}</div>
+                  <div>{w.sets}</div>
+                  <div>{w.reps}</div>
+                  <div>{w.weight}</div>
+                  <div>
+                    <button on:click={() => beginEdit(w)}>Edit</button>
+                  </div>
+                </div>
+              {/if}
+            {/each}
           </div>
         {/if}
       </div>
