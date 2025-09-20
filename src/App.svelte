@@ -439,6 +439,7 @@
       </div>
     {/if}
   </div>
+  <button class="theme-btn nav-btn {page==='home' ? 'active' : ''}" on:click={() => page='home'}>Home</button>
   {#if userName}
     <button class="theme-btn nav-btn {page==='calendar' ? 'active' : ''}" on:click={goCalendar}>Calendar</button>
     <button class="theme-btn nav-btn {page==='tracking' ? 'active' : ''}" on:click={goTracking}>Tracker</button>
