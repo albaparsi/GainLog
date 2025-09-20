@@ -40,6 +40,12 @@
   let setsOptions = Array.from({length: 10}, (_, i) => i + 1);
   let repsOptions = Array.from({length: 20}, (_, i) => i + 1);
 
+  function ordinal(n) {
+    const s = ["th","st","nd","rd"];
+    const v = n % 100;
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
+  }
+
   // For multiple exercises
   function createTemplateRow() { return { name: '', sets: 1, reps: 1, weight: '', editing: false, submitted: false, isTemplate: true }; }
   let exercises = [
@@ -412,10 +418,7 @@
   .inline-input:disabled { opacity:0.75; color:#555; }
   .tracker-footer { display:flex; margin-top:0.75rem; gap:0.75rem; min-height:42px; align-items:center; }
   .prompt-box { min-height:42px; }
-  .faux-input { display:block; width:100%; height:32px; line-height:32px; background:transparent; border:0; padding:0 4px; font-size:0.85rem; color:var(--color-text); box-sizing:border-box; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
   table.track-table th { color: var(--color-text); font-weight:600; }
-  table.track-table td.numeric .faux-input { text-align:center; font-weight:600; }
-  .faux-input.placeholder { color:#999; font-style:italic; }
   .action-btns { display:flex; gap:6px; justify-content:flex-start; }
 </style>
 
@@ -502,11 +505,11 @@
               <td class="numeric">
                 {#if ex.editing}
                   <select class="inline-input" bind:value={exercises[idx].sets}>
-                    {#each setsOptions as n}<option value={n}>{n}</option>{/each}
+                    {#each setsOptions as n}<option value={n}>{ordinal(n)}</option>{/each}
                   </select>
                 {:else}
                   <select class="inline-input" disabled>
-                    {#each setsOptions as n}<option value={n} selected={n===(ex.sets||3)}>{n}</option>{/each}
+                    {#each setsOptions as n}<option value={n} selected={n===(ex.sets||3)}>{ordinal(n)}</option>{/each}
                   </select>
                 {/if}
               </td>
