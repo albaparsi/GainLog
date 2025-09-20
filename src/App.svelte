@@ -194,6 +194,23 @@
     }
   }
 
+  async function removeDateWorkout(w) {
+    // If it's a new unsaved row just drop it
+    if (!w.workout_id) {
+      dateWorkouts = dateWorkouts.filter(item => item !== w);
+      return;
+    }
+    if (!confirm('Remove this workout?')) return;
+    try {
+      const res = await fetch(`${API_BASE}/workouts/${w.workout_id}`, { method:'DELETE' });
+      if (!res.ok) throw new Error('Delete failed');
+      dateWorkouts = dateWorkouts.filter(item => item !== w);
+    } catch (e) {
+      console.error(e);
+      alert('Unable to remove workout');
+    }
+  }
+
   function addExerciseRow() {
     exercises = [...exercises, { name: '', sets: 1, reps: 1, weight: '', editing: false, submitted: false, isTemplate: false }];
   }
@@ -392,9 +409,10 @@
   table.track-table tbody tr { background:var(--color-row); transition: background .15s; height:48px; }
   table.track-table td { padding:6px 10px; vertical-align:middle; height:48px; }
   .inline-input { width:100%; padding:4px 6px; font:inherit; border:1px solid #b4b4b4; border-radius:6px; background:var(--color-input); height:32px; box-sizing:border-box; }
+  .inline-input:disabled { opacity:0.75; color:#555; }
   .tracker-footer { display:flex; margin-top:0.75rem; gap:0.75rem; min-height:42px; align-items:center; }
   .prompt-box { min-height:42px; }
-  .faux-input { display:block; width:100%; height:32px; line-height:32px; background:var(--color-input); border:1px solid #b4b4b4; border-radius:6px; padding:0 8px; font-size:0.85rem; color:var(--color-text); box-sizing:border-box; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+  .faux-input { display:block; width:100%; height:32px; line-height:32px; background:transparent; border:0; padding:0 4px; font-size:0.85rem; color:var(--color-text); box-sizing:border-box; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
   table.track-table th { color: var(--color-text); font-weight:600; }
   table.track-table td.numeric .faux-input { text-align:center; font-weight:600; }
   .faux-input.placeholder { color:#999; font-style:italic; }
@@ -457,7 +475,7 @@
         <div style="display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap;">
           <span style="font-size:1.15rem; font-weight:700;">What are we hitting today?</span>
           <div style="display:flex; gap:0.5rem; align-items:center; flex:1;">
-            <input type="text" placeholder="e.g. Chest, Cardio..." bind:value={workoutQuestion} style="flex:1;" />
+            <input class="inline-input" type="text" placeholder="e.g. Chest, Cardio..." bind:value={workoutQuestion} style="flex:1;" />
           </div>
         </div>
       </div>
@@ -478,7 +496,7 @@
                 {#if ex.editing}
                   <input class="inline-input" type="text" bind:value={exercises[idx].name} />
                 {:else}
-                  <span class="faux-input {ex.name ? '' : 'placeholder'}">{ex.name || 'Bench Press'}</span>
+                  <input class="inline-input" type="text" value={ex.name || 'Bench Press'} disabled />
                 {/if}
               </td>
               <td class="numeric">
@@ -487,7 +505,9 @@
                     {#each setsOptions as n}<option value={n}>{n}</option>{/each}
                   </select>
                 {:else}
-                  <span class="faux-input {ex.sets ? '' : 'placeholder'}">{ex.sets || 3}</span>
+                  <select class="inline-input" disabled>
+                    {#each setsOptions as n}<option value={n} selected={n===(ex.sets||3)}>{n}</option>{/each}
+                  </select>
                 {/if}
               </td>
               <td class="numeric">
@@ -496,14 +516,16 @@
                     {#each repsOptions as n}<option value={n}>{n}</option>{/each}
                   </select>
                 {:else}
-                  <span class="faux-input {ex.reps ? '' : 'placeholder'}">{ex.reps || 10}</span>
+                  <select class="inline-input" disabled>
+                    {#each repsOptions as n}<option value={n} selected={n===(ex.reps||10)}>{n}</option>{/each}
+                  </select>
                 {/if}
               </td>
               <td class="numeric">
                 {#if ex.editing}
                   <input class="inline-input" type="text" bind:value={exercises[idx].weight} />
                 {:else}
-                  <span class="faux-input {ex.weight ? '' : 'placeholder'}">{ex.weight || '135 lb'}</span>
+                  <input class="inline-input" type="text" value={ex.weight || '135 lb'} disabled />
                 {/if}
               </td>
               <td>
@@ -609,14 +631,15 @@
                   {/if}
                 </div>
               {:else}
-                <div style="display:grid; grid-template-columns: 120px 100px 100px 100px 100px 160px; gap:4px; margin-top:4px;">
+        <div style="display:grid; grid-template-columns: 120px 100px 100px 100px 100px 160px; gap:4px; margin-top:4px;">
                   <div>{w.body_part}</div>
                   <div>{w.exercise}</div>
                   <div>{w.sets}</div>
                   <div>{w.reps}</div>
                   <div>{w.weight}</div>
                   <div>
-                    <button on:click={() => beginEdit(w)}>Edit</button>
+          <button on:click={() => beginEdit(w)}>Edit</button>
+          <button style="margin-left:6px;" on:click={() => removeDateWorkout(w)}>Remove</button>
                   </div>
                 </div>
               {/if}
