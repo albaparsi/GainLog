@@ -12,11 +12,11 @@
   let theme = 'pink';
   let showThemePicker = false;
   const themes = {
-    pink:  { bg: '#ffe4ec', text: '#2d2d2d', accent: '#ff8fb1' },
-    green: { bg: '#e3f9e5', text: '#1f3324', accent: '#5bbf72' },
-    yellow:{ bg: '#fff9d6', text: '#3a3200', accent: '#e0b300' },
-  orange:{ bg: '#ffe9d6', text: '#3b2412', accent: '#ff9a3c' },
-  blue:  { bg: '#e0f2ff', text: '#1e2b36', accent: '#6ab4ff' }
+    pink:  { bg: '#ffe4ec', text: '#2d2d2d', accent: '#ff8fb1', panel:'#ffd3e2', row:'#f9bed3', input:'#ffc3d9' },
+    green: { bg: '#e3f9e5', text: '#1f3324', accent: '#5bbf72', panel:'#d2f0d8', row:'#bee6c7', input:'#b2dbbb' },
+    yellow:{ bg: '#fff9d6', text: '#3a3200', accent: '#e0b300', panel:'#f5e7a8', row:'#ecd989', input:'#e3cd72' },
+    orange:{ bg: '#ffe9d6', text: '#3b2412', accent: '#ff9a3c', panel:'#ffd2b0', row:'#ffc096', input:'#ffb27d' },
+    blue:  { bg: '#e0f2ff', text: '#1e2b36', accent: '#6ab4ff', panel:'#cbe6ff', row:'#b5dbff', input:'#a4d1fc' }
   };
 
   function applyTheme(t) {
@@ -24,19 +24,26 @@
     const body = document.body;
     for (const key of Object.keys(themes)) body.classList.remove('theme-' + key);
     body.classList.add('theme-' + t);
+    const th = themes[t];
+    body.style.setProperty('--color-bg', th.bg);
+    body.style.setProperty('--color-text', th.text);
+    body.style.setProperty('--color-accent', th.accent);
+  body.style.setProperty('--color-panel', th.panel);
+  body.style.setProperty('--color-row', th.row);
+  body.style.setProperty('--color-input', th.input || th.row);
     localStorage.setItem('ft_theme', t);
     showThemePicker = false;
   }
 
   // Tracking page state
   let workoutQuestion = '';
-  let workoutInput = '';
   let setsOptions = Array.from({length: 10}, (_, i) => i + 1);
   let repsOptions = Array.from({length: 20}, (_, i) => i + 1);
 
   // For multiple exercises
+  function createTemplateRow() { return { name: '', sets: 1, reps: 1, weight: '', editing: false, submitted: false, isTemplate: true }; }
   let exercises = [
-    { name: '', sets: 1, reps: 1, weight: '' }
+    createTemplateRow()
   ];
 
   let showDonePrompt = false;
@@ -188,49 +195,73 @@
   }
 
   function addExerciseRow() {
-    exercises = [...exercises, { name: '', sets: 1, reps: 1, weight: '' }];
+    exercises = [...exercises, { name: '', sets: 1, reps: 1, weight: '', editing: false, submitted: false, isTemplate: false }];
   }
 
-  async function submitExerciseRow(idx) {
-    if (!exercises[idx].name.trim()) return;
-    if (!userId) {
-      alert('Create a user first.');
+  function beginExerciseEdit(idx) {
+    exercises = exercises.map((ex,i)=> i===idx ? { ...ex, editing:true } : ex);
+  }
+
+  function cancelExerciseEdit(idx) {
+    const row = exercises[idx];
+    if (!row) return;
+    // If new unsaved non-template row and cancelled empty, remove it
+    if (!row.isTemplate && !row.submitted && !row.name.trim()) {
+      exercises = exercises.filter((_,i)=> i!==idx);
       return;
     }
-    const payload = {
-      user_id: userId,
-      exercise: exercises[idx].name.trim(),
-      sets: exercises[idx].sets,
-      reps: exercises[idx].reps,
-      weight: exercises[idx].weight || null,
-      body_part: workoutQuestion || 'General',
-      workout_date: joinDate ? new Date(joinDate).toISOString().slice(0,10) : new Date().toISOString().slice(0,10)
-    };
-    try {
-      const res = await fetch(`${API_BASE}/workouts`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      if (!res.ok) throw new Error('Failed to save workout');
-      const data = await res.json();
-      exercises = exercises.map((ex, i) => i === idx ? { ...ex, submitted: true, workout_id: data.workout_id } : ex);
-    } catch (e) {
-      console.error(e);
-      alert('Unable to save workout. Is the backend running?');
+    exercises = exercises.map((ex,i)=> i===idx ? { ...ex, editing:false } : ex);
+  }
+
+  async function persistExercise(idx) {
+    const row = exercises[idx];
+    if (!row) return;
+    if (!row.name.trim()) return; // don't save empty
+    // Local-only update; mark as submitted but no backend until Done Tracking
+    exercises = exercises.map((ex,i)=> i===idx ? { ...ex, submitted:true, editing:false, isTemplate:false } : ex);
+  }
+
+  async function saveAllExercises() {
+    if (!userId) { alert('Create a user first.'); return; }
+    const todayIso = joinDate ? new Date(joinDate).toISOString().slice(0,10) : new Date().toISOString().slice(0,10);
+    for (let i=0;i<exercises.length;i++) {
+      const ex = exercises[i];
+      if (!ex.name.trim()) continue;
+      const payload = {
+        user_id: userId,
+        exercise: ex.name.trim(),
+        sets: ex.sets,
+        reps: ex.reps,
+        weight: ex.weight || null,
+        body_part: workoutQuestion || 'General',
+        workout_date: todayIso
+      };
+      try {
+        if (ex.workout_id) {
+          const res = await fetch(`${API_BASE}/workouts/${ex.workout_id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+          if (!res.ok) throw new Error('Update failed');
+          const data = await res.json();
+          exercises[i] = { ...exercises[i], name:data.exercise, sets:data.sets, reps:data.reps, weight:data.weight };
+        } else {
+          const res = await fetch(`${API_BASE}/workouts`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+          if (!res.ok) throw new Error('Create failed');
+          const data = await res.json();
+          exercises[i] = { ...exercises[i], workout_id:data.workout_id };
+        }
+      } catch(e) {
+        console.error('Failed to save exercise', ex, e);
+      }
     }
   }
 
-  function doneTracking() {
-    showDonePrompt = true;
-  }
-
-  function confirmDoneTracking(yes) {
-    showDonePrompt = false;
-    if (yes) {
-      showSavedMsg = true;
-      setTimeout(() => showSavedMsg = false, 3000);
+  function removeExercise(idx) {
+    const row = exercises[idx];
+    if (!row) return;
+    if (row.isTemplate) return; // keep initial template row
+    if (row.workout_id) {
+      // Placeholder for future backend DELETE call
     }
+    exercises = exercises.filter((_,i)=> i!==idx);
   }
 
   onMount(() => {
@@ -284,14 +315,20 @@
     page = 'tracking';
   }
 
-  function submitWorkout() {
-    if (workoutInput.trim()) {
-      workoutQuestion = workoutInput.trim();
-      workoutInput = '';
-    }
+  // workoutQuestion will be captured directly from input, no submit button
+
+  function doneTracking() {
+    showDonePrompt = true;
   }
 
-
+  function confirmDoneTracking(yes) {
+    showDonePrompt = false;
+    if (yes) {
+  saveAllExercises();
+      showSavedMsg = true;
+      setTimeout(() => showSavedMsg = false, 3000);
+    }
+  }
 
   $: activeTime = `${Math.floor(activeSeconds/60)}m ${activeSeconds%60}s`;
 </script>
@@ -325,40 +362,6 @@
     gap: 0.5rem;
     margin-top: 1rem;
   }
-  .tracking-header {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    margin-bottom: 2rem;
-  }
-  .exercise-header-row {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    font-weight: bold;
-    margin-bottom: 0.5rem;
-  }
-  .exercise-input-row {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    margin-bottom: 0.5rem;
-  }
-  .exercise-list-row {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    margin-bottom: 0.5rem;
-    background: #f7f7f7;
-    padding: 0.3rem 0.5rem;
-    border-radius: 4px;
-  }
-  .exercise-label {
-    min-width: 80px;
-  }
-  .dropdown {
-    min-width: 60px;
-  }
   /* Removed unused original template selectors (.logo, .read-the-docs) */
   /* Theme switcher */
   .theme-switcher { position: fixed; top: 10px; left: 10px; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; z-index: 1000; }
@@ -373,8 +376,8 @@
   .calendar-wrapper { max-width: 880px; margin: 2rem auto 0; }
   .calendar-grid { display:grid; grid-template-columns: repeat(7, 110px); gap:12px; justify-content:center; }
   .calendar-head { font-weight:600; text-align:center; font-size:0.9rem; }
-  .cal-cell { height:110px; width:110px; border:2px solid #555; background: var(--color-panel); border-radius:14px; display:flex; flex-direction:column; justify-content:flex-start; align-items:flex-start; padding:8px 10px; gap:6px; cursor:pointer; font-size:0.95rem; font-weight:500; transition: background .2s, transform .15s, box-shadow .2s; }
-  .cal-cell:hover { background: var(--color-row); }
+  .cal-cell { height:110px; width:110px; border:2px solid rgba(0,0,0,0.35); background: var(--color-row); border-radius:14px; display:flex; flex-direction:column; justify-content:flex-start; align-items:flex-start; padding:8px 10px; gap:6px; cursor:pointer; font-size:0.95rem; font-weight:500; transition: background .2s, transform .15s, box-shadow .2s; }
+  .cal-cell:hover { background: var(--color-panel); }
   .cal-cell.selected { background: var(--color-accent); color:#fff; box-shadow:0 4px 10px rgba(0,0,0,0.15); }
   .cal-day-number { font-size:1.3rem; font-weight:600; line-height:1; color:#333; }
   .cal-cell.selected .cal-day-number { color:#fff; }
@@ -384,11 +387,18 @@
     .cal-cell { height:70px; width:100%; padding:6px 6px; border-radius:10px; }
   /* marker small */
   }
-  .exercise-table { display:grid; grid-template-columns: 1.3fr 0.6fr 0.6fr 0.8fr 0.8fr; align-items:center; gap:0.75rem; }
-  .exercise-header { font-weight:700; font-size:0.85rem; }
-  .exercise-row { background:#f7f7f7; padding:0.3rem 0.5rem; border-radius:4px; }
-  .exercise-row.submitted { background:#ececec; }
-  .exercise-row input, .exercise-row select { width:100%; }
+  .track-table-wrapper { max-width:880px; width:880px; background:var(--color-panel); border:1px solid rgba(0,0,0,0.15); border-radius:12px; padding:1rem 1.2rem 1.2rem; box-shadow:0 3px 8px rgba(0,0,0,0.05); box-sizing:border-box; }
+  table.track-table { width:100%; table-layout:fixed; border-collapse:separate; border-spacing:0 6px; }
+  table.track-table tbody tr { background:var(--color-row); transition: background .15s; height:48px; }
+  table.track-table td { padding:6px 10px; vertical-align:middle; height:48px; }
+  .inline-input { width:100%; padding:4px 6px; font:inherit; border:1px solid #b4b4b4; border-radius:6px; background:var(--color-input); height:32px; box-sizing:border-box; }
+  .tracker-footer { display:flex; margin-top:0.75rem; gap:0.75rem; min-height:42px; align-items:center; }
+  .prompt-box { min-height:42px; }
+  .faux-input { display:block; width:100%; height:32px; line-height:32px; background:var(--color-input); border:1px solid #b4b4b4; border-radius:6px; padding:0 8px; font-size:0.85rem; color:var(--color-text); box-sizing:border-box; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+  table.track-table th { color: var(--color-text); font-weight:600; }
+  table.track-table td.numeric .faux-input { text-align:center; font-weight:600; }
+  .faux-input.placeholder { color:#999; font-style:italic; }
+  .action-btns { display:flex; gap:6px; justify-content:flex-start; }
 </style>
 
 <!-- Global Theme / Nav -->
@@ -442,58 +452,90 @@
 
 {#if page === 'tracking'}
   <div>
-    <div class="tracking-header">
-      <span class="title" style="font-size:1.2rem;">What are we hitting today?</span>
-      {#if workoutQuestion}
-        <span style="font-weight:bold;">{workoutQuestion}</span>
-      {:else}
-        <input type="text" placeholder="e.g. Chest, Cardio..." bind:value={workoutInput} on:keydown={(e) => e.key === 'Enter' && submitWorkout()} />
-        <button on:click={submitWorkout}>Submit</button>
+    <div class="track-table-wrapper">
+      <div class="table-title" style="display:flex; flex-direction:column; gap:0.75rem; margin-bottom:0.75rem;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap;">
+          <span style="font-size:1.15rem; font-weight:700;">What are we hitting today?</span>
+          <div style="display:flex; gap:0.5rem; align-items:center; flex:1;">
+            <input type="text" placeholder="e.g. Chest, Cardio..." bind:value={workoutQuestion} style="flex:1;" />
+          </div>
+        </div>
+      </div>
+      <table class="track-table">
+        <thead>
+          <tr>
+            <th style="width:38%;">Exercise</th>
+            <th style="width:14%;">Sets</th>
+            <th style="width:14%;">Reps</th>
+            <th style="width:14%;">Weight</th>
+            <th style="width:20%; text-align:left;">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each exercises as ex, idx}
+            <tr class:{editing:ex.editing}>
+              <td>
+                {#if ex.editing}
+                  <input class="inline-input" type="text" bind:value={exercises[idx].name} />
+                {:else}
+                  <span class="faux-input {ex.name ? '' : 'placeholder'}">{ex.name || 'Bench Press'}</span>
+                {/if}
+              </td>
+              <td class="numeric">
+                {#if ex.editing}
+                  <select class="inline-input" bind:value={exercises[idx].sets}>
+                    {#each setsOptions as n}<option value={n}>{n}</option>{/each}
+                  </select>
+                {:else}
+                  <span class="faux-input {ex.sets ? '' : 'placeholder'}">{ex.sets || 3}</span>
+                {/if}
+              </td>
+              <td class="numeric">
+                {#if ex.editing}
+                  <select class="inline-input" bind:value={exercises[idx].reps}>
+                    {#each repsOptions as n}<option value={n}>{n}</option>{/each}
+                  </select>
+                {:else}
+                  <span class="faux-input {ex.reps ? '' : 'placeholder'}">{ex.reps || 10}</span>
+                {/if}
+              </td>
+              <td class="numeric">
+                {#if ex.editing}
+                  <input class="inline-input" type="text" bind:value={exercises[idx].weight} />
+                {:else}
+                  <span class="faux-input {ex.weight ? '' : 'placeholder'}">{ex.weight || '135 lb'}</span>
+                {/if}
+              </td>
+              <td>
+                <div class="action-btns">
+                  {#if ex.editing}
+                    <button on:click={() => persistExercise(idx)}>Save</button>
+                    <button on:click={() => cancelExerciseEdit(idx)}>Cancel</button>
+                  {:else}
+                    <button on:click={() => beginExerciseEdit(idx)}>Edit</button>
+                    {#if !ex.isTemplate}<button on:click={() => removeExercise(idx)}>Remove</button>{/if}
+                  {/if}
+                </div>
+              </td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+      <div class="tracker-footer">
+        <button on:click={addExerciseRow}>Add Exercise</button>
+        <button on:click={doneTracking}>Done Tracking</button>
+      </div>
+      {#if showDonePrompt}
+        <div class="prompt-box" style="margin-top:1rem;">
+          <span>Are you done tracking?</span>
+          <button style="margin-left:1rem;" on:click={() => confirmDoneTracking(true)}>Yes</button>
+          <button style="margin-left:0.5rem;" on:click={() => confirmDoneTracking(false)}>No</button>
+        </div>
+      {/if}
+      {#if showSavedMsg}
+        <div style="margin-top:1rem; color:green; font-weight:bold;">Your results have been saved.</div>
       {/if}
     </div>
-    {#if !selectedDate}
-      <div>
-        <div class="exercise-table exercise-header">
-          <div>Exercise</div>
-          <div>Set(s)</div>
-          <div>Rep(s)</div>
-          <div>Weight</div>
-          <div></div>
-        </div>
-        {#each exercises as ex, idx}
-          {#if !ex.submitted}
-            <div class="exercise-table exercise-row">
-              <div><input type="text" placeholder="Exercise name" bind:value={exercises[idx].name} on:keydown={(e) => e.key === 'Enter' && submitExerciseRow(idx)} /></div>
-              <div><select class="dropdown" bind:value={exercises[idx].sets}>{#each setsOptions as n}<option value={n}>{n}</option>{/each}</select></div>
-              <div><select class="dropdown" bind:value={exercises[idx].reps}>{#each repsOptions as n}<option value={n}>{n}</option>{/each}</select></div>
-              <div><input type="text" placeholder="Weight" bind:value={exercises[idx].weight} on:keydown={(e) => e.key === 'Enter' && submitExerciseRow(idx)} /></div>
-              <div><button on:click={() => submitExerciseRow(idx)}>Submit</button></div>
-            </div>
-          {:else}
-            <div class="exercise-table exercise-row submitted">
-              <div style="font-weight:600;">{ex.name}</div>
-              <div>{ex.sets}</div>
-              <div>{ex.reps}</div>
-              <div>{ex.weight}</div>
-              <div></div>
-            </div>
-          {/if}
-        {/each}
-        <button style="margin-top:0.5rem;" on:click={addExerciseRow}>Add Row</button>
-        <button style="margin-top:0.5rem; margin-left:1rem;" on:click={doneTracking}>Done</button>
-        {#if showDonePrompt}
-          <div class="prompt-box" style="margin-top:1rem;">
-            <span>Are you done tracking?</span>
-            <button style="margin-left:1rem;" on:click={() => confirmDoneTracking(true)}>Yes</button>
-            <button style="margin-left:0.5rem;" on:click={() => confirmDoneTracking(false)}>No</button>
-          </div>
-        {/if}
-        {#if showSavedMsg}
-          <div style="margin-top:1rem; color:green; font-weight:bold;">Your results have been saved.</div>
-        {/if}
-      </div>
-    {/if}
-    
   </div>
 {/if}
 
