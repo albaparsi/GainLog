@@ -40,6 +40,31 @@
   let setsOptions = Array.from({length: 10}, (_, i) => i + 1);
   let repsOptions = Array.from({length: 20}, (_, i) => i + 1);
 
+  // Goals page state
+  let goalMuscleGroup = '';
+  function createGoalTemplateRow() { return { name: '', sets: 1, reps: 1, weight: '', editing: false, submitted: false, isTemplate: true }; }
+  let goalRows = [ createGoalTemplateRow() ];
+
+  function goGoals() { if (page !== 'goals') page = 'goals'; }
+  function addGoalRow() { goalRows = [...goalRows, { name:'', sets:1, reps:1, weight:'', editing:false, submitted:false, isTemplate:false }]; }
+  function beginGoalEdit(idx) { goalRows = goalRows.map((r,i)=> i===idx ? { ...r, editing:true } : r); }
+  function cancelGoalEdit(idx) {
+    const row = goalRows[idx];
+    if (!row) return;
+    if (!row.isTemplate && !row.submitted && !row.name.trim()) { goalRows = goalRows.filter((_,i)=> i!==idx); return; }
+    goalRows = goalRows.map((r,i)=> i===idx ? { ...r, editing:false } : r);
+  }
+  function persistGoalRow(idx) {
+    const row = goalRows[idx];
+    if (!row || !row.name.trim()) return;
+    goalRows = goalRows.map((r,i)=> i===idx ? { ...r, submitted:true, editing:false, isTemplate:false } : r);
+  }
+  function removeGoalRow(idx) {
+    const row = goalRows[idx];
+    if (!row || row.isTemplate) return;
+    goalRows = goalRows.filter((_,i)=> i!==idx);
+  }
+
   function ordinal(n) {
     const s = ["th","st","nd","rd"];
     const v = n % 100;
@@ -358,26 +383,25 @@
 
 <style>
   .header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    width: 100%;
-    margin-bottom: 2rem;
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    width:100%;
+    margin-bottom:0.75rem;
   }
   .title {
-    font-size: 2rem;
-    font-weight: bold;
+    font-size:3rem;
+    line-height:1.05;
+    font-weight:800;
+    letter-spacing:0.5px;
   }
-  .top-right {
-    text-align: right;
-    font-size: 0.9rem;
-    color: #666;
-  }
+  .global-date { position:fixed; top:10px; right:14px; font-size:0.85rem; font-weight:500; color:#333; }
   .center-box {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    margin-top: 4rem;
+    display:flex;
+    flex-direction:column;
+    align-items:flex-start;
+    margin-top:0;
+    gap:1rem;
   }
   .input-row {
     display: flex;
@@ -423,6 +447,7 @@
 </style>
 
 <!-- Global Theme / Nav -->
+<div class="global-date">Today's date: {today}</div>
 <div class="theme-switcher">
   <div style="display:flex; align-items:center; gap:8px;">
     <button class="theme-btn" on:click={() => showThemePicker = !showThemePicker}>Theme</button>
@@ -443,32 +468,114 @@
   {#if userName}
     <button class="theme-btn nav-btn {page==='calendar' ? 'active' : ''}" on:click={goCalendar}>Calendar</button>
     <button class="theme-btn nav-btn {page==='tracking' ? 'active' : ''}" on:click={goTracking}>Tracker</button>
+  <button class="theme-btn nav-btn {page==='goals' ? 'active' : ''}" on:click={goGoals}>Set Goal</button>
   {/if}
 </div>
 
 {#if page === 'home'}
   <div class="header">
-    <div class="title">Fitness Tracker</div>
-    <div class="top-right">
-      <div>{today}</div>
-      <div>Active: {activeTime}</div>
-      <div>Joined: {joinDate}</div>
+    <div>
+      <div class="title">Fitness Tracker</div>
+      <div class="center-box">
+  <div class="input-row" style="margin-top:0; justify-content:center; width:100%; text-align:center;">
+          <span>Hello</span>
+          {#if userName}
+            <span style="font-weight:bold;">{userName}</span>
+          {:else}
+            <input type="text" placeholder="Enter your name" bind:value={inputName} on:keydown={(e) => e.key === 'Enter' && submitName()} />
+            <button on:click={submitName}>Submit</button>
+          {/if}
+          <span>, let's start tracking.</span>
+        </div>
+        {#if userName}
+          <div style="width:100%; display:flex; justify-content:center; margin-top:0.5rem;">
+            <button on:click={startTracking}>Start Tracking</button>
+          </div>
+        {/if}
+      </div>
     </div>
   </div>
-  <div class="center-box">
-    <div class="input-row">
-      <span>Hello</span>
-      {#if userName}
-        <span style="font-weight:bold;">{userName}</span>
-      {:else}
-        <input type="text" placeholder="Enter your name" bind:value={inputName} on:keydown={(e) => e.key === 'Enter' && submitName()} />
-        <button on:click={submitName}>Submit</button>
-      {/if}
-      <span>, let's start tracking.</span>
+{/if}
+
+{#if page === 'goals'}
+  <div>
+    <div class="track-table-wrapper">
+      <div class="table-title" style="display:flex; flex-direction:column; gap:0.75rem; margin-bottom:0.75rem;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap;">
+          <span style="font-size:1.3rem; font-weight:700;">Goals</span>
+          <div style="display:flex; gap:0.5rem; align-items:center; flex:1;">
+            <input class="inline-input" type="text" placeholder="Muscle Group" bind:value={goalMuscleGroup} style="flex:1;" />
+          </div>
+        </div>
+      </div>
+      <table class="track-table">
+        <thead>
+          <tr>
+            <th style="width:38%;">Exercise</th>
+            <th style="width:14%;">Sets</th>
+            <th style="width:14%;">Reps</th>
+            <th style="width:14%;">Weight</th>
+            <th style="width:20%; text-align:left;">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each goalRows as gx, gidx}
+            <tr class:{editing:gx.editing}>
+              <td>
+                {#if gx.editing}
+                  <input class="inline-input" type="text" bind:value={goalRows[gidx].name} />
+                {:else}
+                  <input class="inline-input" type="text" value={gx.name || 'Bench Press'} disabled />
+                {/if}
+              </td>
+              <td class="numeric">
+                {#if gx.editing}
+                  <select class="inline-input" bind:value={goalRows[gidx].sets}>
+                    {#each setsOptions as n}<option value={n}>{n}</option>{/each}
+                  </select>
+                {:else}
+                  <select class="inline-input" disabled>
+                    {#each setsOptions as n}<option value={n} selected={n===(gx.sets||3)}>{n}</option>{/each}
+                  </select>
+                {/if}
+              </td>
+              <td class="numeric">
+                {#if gx.editing}
+                  <select class="inline-input" bind:value={goalRows[gidx].reps}>
+                    {#each repsOptions as n}<option value={n}>{n}</option>{/each}
+                  </select>
+                {:else}
+                  <select class="inline-input" disabled>
+                    {#each repsOptions as n}<option value={n} selected={n===(gx.reps||10)}>{n}</option>{/each}
+                  </select>
+                {/if}
+              </td>
+              <td class="numeric">
+                {#if gx.editing}
+                  <input class="inline-input" type="text" bind:value={goalRows[gidx].weight} />
+                {:else}
+                  <input class="inline-input" type="text" value={gx.weight || '135 lb'} disabled />
+                {/if}
+              </td>
+              <td>
+                <div class="action-btns">
+                  {#if gx.editing}
+                    <button on:click={() => persistGoalRow(gidx)}>Save</button>
+                    <button on:click={() => cancelGoalEdit(gidx)}>Cancel</button>
+                  {:else}
+                    <button on:click={() => beginGoalEdit(gidx)}>Edit</button>
+                    {#if !gx.isTemplate}<button on:click={() => removeGoalRow(gidx)}>Remove</button>{/if}
+                  {/if}
+                </div>
+              </td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+      <div class="tracker-footer">
+        <button on:click={addGoalRow}>Add Goal Exercise</button>
+      </div>
     </div>
-    {#if userName}
-      <button style="margin-top:2rem;" on:click={startTracking}>Start Tracking</button>
-    {/if}
   </div>
 {/if}
 
