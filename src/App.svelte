@@ -500,17 +500,37 @@
     }
   }
 
-  function startTracking() {
-    page = 'tracking';
+  function changeUser() {
+    // Stop activity timer
+    if (activeInterval) {
+      clearInterval(activeInterval);
+      activeInterval = null;
+    }
+    activeSeconds = 0;
+    // Clear stored user
+    localStorage.removeItem('ft_user_id');
+    localStorage.removeItem('ft_user_name');
+    // Reset app state
+    userId = null;
+    userName = '';
+    inputName = '';
+    page = 'home';
+    // Optional: clear tracking inputs
+    workoutQuestion = '';
+    exercises = [ createTemplateRow() ];
+    goalMuscleGroup = '';
+    goalRows = [ createGoalTemplateRow() ];
+    selectedDate = null;
+    dateWorkouts = [];
+    dateGoals = [];
   }
 
-  // workoutQuestion will be captured directly from input, no submit button
-
+  // Navigation + done tracking flow
+  function startTracking() { page = 'tracking'; }
   function doneTracking() {
     if (!hasWorkoutInputs) return;
     showDonePrompt = true;
   }
-
   async function confirmDoneTracking(yes) {
     showDonePrompt = false;
     if (!yes) return;
@@ -521,8 +541,6 @@
     showSavedMsg = true;
     setTimeout(() => showSavedMsg = false, 3000);
   }
-
-  $: activeTime = `${Math.floor(activeSeconds/60)}m ${activeSeconds%60}s`;
 </script>
 
 <style>
@@ -621,7 +639,8 @@
   {#if userName}
     <button class="theme-btn nav-btn {page==='calendar' ? 'active' : ''}" on:click={goCalendar}>Calendar</button>
     <button class="theme-btn nav-btn {page==='tracking' ? 'active' : ''}" on:click={goTracking}>Tracker</button>
-  <button class="theme-btn nav-btn {page==='goals' ? 'active' : ''}" on:click={goGoals}>Set Goal</button>
+    <button class="theme-btn nav-btn {page==='goals' ? 'active' : ''}" on:click={goGoals}>Set Goal</button>
+    <button class="theme-btn" on:click={changeUser}>Change User</button>
   {/if}
 </div>
 
@@ -641,8 +660,9 @@
           <span>, let's start tracking.</span>
         </div>
         {#if userName}
-          <div style="width:100%; display:flex; justify-content:center; margin-top:0.5rem;">
+          <div style="width:100%; display:flex; justify-content:center; margin-top:0.5rem; gap:0.5rem;">
             <button on:click={startTracking}>Start Tracking</button>
+            <button on:click={changeUser}>Change User</button>
           </div>
         {/if}
       </div>
