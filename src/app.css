@@ -76,13 +76,27 @@ button {
 button:hover {
   background-color: var(--color-accent-hover);
 }
-button:focus,
+button:active {
+  background-color: var(--color-accent-hover);
+  transform: translateY(1px);
+}
+button:disabled, button[disabled] {
+  opacity: 0.55;
+  cursor: not-allowed;
+  filter: grayscale(10%);
+}
 button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+  outline: 2px solid var(--color-accent-hover);
+  outline-offset: 2px;
 }
 
 /* Utility classes for panels and rows */
 .panel { background: var(--color-panel); border:1px solid var(--color-border); border-radius:8px; padding:1rem; }
 .row-muted { background: var(--color-row); }
 .prompt-box { background: var(--color-prompt-bg); border:1px solid var(--color-prompt-border); padding:1rem; border-radius:6px; }
+
+/* Spacing utilities */
+.ml-sm { margin-left:4px !important; }
+.ml-md { margin-left:0.5rem !important; }
+.ml-lg { margin-left:1rem !important; }
 

@@ -580,13 +580,13 @@
   /* Removed unused original template selectors (.logo, .read-the-docs) */
   /* Theme switcher */
   .theme-switcher { position: fixed; top: 10px; left: 10px; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; z-index: 1000; }
-  .theme-btn { padding: 0.4rem 0.9rem; background: transparent; color: #000; font-size: 0.85rem; border:1px solid #000; border-radius:20px; cursor:pointer; transition: background .15s, color .15s; }
-  .theme-btn:hover { background: rgba(0,0,0,0.07); }
+  /* theme-btn now uses global button styling for consistency */
   .theme-circles { display:flex; gap:8px; }
   .theme-circle { width:28px; height:28px; padding:0; aspect-ratio:1/1; border-radius:50%; cursor:pointer; border:1px solid #000; background: transparent; transition: transform 0.15s, border .15s; display:inline-block; }
   .theme-circle:hover { transform: scale(1.08); }
   .theme-circle.active { border:3px solid #000; }
-  .nav-btn.active { background:#000; color:#fff; }
+  /* Active nav state just adds an inset highlight */
+  .nav-btn.active { box-shadow:0 0 0 2px rgba(255,255,255,0.6) inset; }
   /* Enlarged calendar */
   .calendar-wrapper { max-width: 880px; margin: 2rem auto 0; }
   .calendar-grid { display:grid; grid-template-columns: repeat(7, 110px); gap:12px; justify-content:center; }
@@ -622,14 +622,7 @@
   .table-header { font-weight: bold; font-size: 0.85rem; }
   .table-row { margin-top: 4px; }
 
-  /* Override nav/theme button styling to accent background with white text */
-  .theme-btn {
-    background: var(--color-accent);
-    color: #fff;
-    border: 1px solid var(--color-accent);
-  }
-  .theme-btn:hover { filter: brightness(0.9); }
-  .nav-btn.active { background: var(--color-accent); color:#fff; box-shadow:0 0 0 2px rgba(255,255,255,0.6) inset; }
+  /* Removed old theme/nav button overrides; all buttons share global styling */
 </style>
 
 <!-- Global Theme / Nav -->
@@ -767,8 +760,8 @@
       {#if showDoneGoalsPrompt}
         <div class="prompt-box" style="margin-top:1rem;">
           <span>Are you done setting goals?</span>
-          <button style="margin-left:1rem;" on:click={() => confirmDoneGoals(true)}>Yes</button>
-          <button style="margin-left:0.5rem;" on:click={() => confirmDoneGoals(false)}>No</button>
+          <button class="ml-lg" on:click={() => confirmDoneGoals(true)}>Yes</button>
+          <button class="ml-md" on:click={() => confirmDoneGoals(false)}>No</button>
         </div>
       {/if}
       {#if goalsSavedMsg}
@@ -872,8 +865,8 @@
       {#if showDonePrompt}
         <div class="prompt-box" style="margin-top:1rem;">
           <span>Are you done tracking?</span>
-          <button style="margin-left:1rem;" on:click={() => confirmDoneTracking(true)}>Yes</button>
-          <button style="margin-left:0.5rem;" on:click={() => confirmDoneTracking(false)}>No</button>
+          <button class="ml-lg" on:click={() => confirmDoneTracking(true)}>Yes</button>
+          <button class="ml-md" on:click={() => confirmDoneTracking(false)}>No</button>
         </div>
       {/if}
       {#if showSavedMsg}
@@ -943,10 +936,10 @@
                   <div>
                     {#if w.workout_id}
                       <button on:click={() => saveEdit(w)}>Save</button>
-                      <button style="margin-left:4px;" on:click={() => cancelEdit(w)}>Cancel</button>
+                      <button class="ml-sm" on:click={() => cancelEdit(w)}>Cancel</button>
                     {:else}
                       <button on:click={() => saveNewDateWorkout(w)}>Create</button>
-                      <button style="margin-left:4px;" on:click={() => cancelEdit(w)}>Cancel</button>
+                      <button class="ml-sm" on:click={() => cancelEdit(w)}>Cancel</button>
                     {/if}
                   </div>
                 </div>
@@ -993,7 +986,7 @@
                   <input type="number" step="0.1" bind:value={g._draft.weight} />
                   <div>
                     <button on:click={() => saveGoalCalEdit(g)}>Save</button>
-                    <button style="margin-left:4px;" on:click={() => cancelGoalCalEdit(g)}>Cancel</button>
+                    <button class="ml-sm" on:click={() => cancelGoalCalEdit(g)}>Cancel</button>
                   </div>
                 </div>
               {:else}
