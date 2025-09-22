@@ -601,15 +601,20 @@
   .prompt-box { min-height:42px; }
   table.track-table th { color: var(--color-text); font-weight:600; }
   .action-btns { display:flex; gap:6px; justify-content:flex-start; }
-  /* Common calendar table layout */
+  /* Common calendar table layout (responsive fractional columns) */
   .table-grid {
     display: grid;
-    grid-template-columns: 110px 100px 80px 80px 90px 130px; /* same widths everywhere */
-    gap: 4px;
+    grid-template-columns: 2fr 3fr 1fr 1fr 1fr 2fr; /* Body Part | Exercise | Sets | Reps | Weight | Actions */
     align-items: center;
+    gap: 0.5rem;
   }
-  .table-header { font-weight: bold; font-size: 0.85rem; }
+  .table-header { font-weight: bold; text-align:left; margin-bottom:0.5rem; font-size:0.85rem; }
   .table-row { margin-top: 4px; }
+  .table-row input { width:100%; box-sizing:border-box; }
+
+  /* Calendar edit/create action buttons inline */
+  .actions { display:flex; gap:0.5rem; }
+  .actions button { flex:1; }
 
   /* Removed old theme/nav button overrides; all buttons share global styling */
 </style>
@@ -870,26 +875,24 @@
                   <input class="inline-input" type="number" min="0" bind:value={w._draft.sets} />
                   <input class="inline-input" type="number" min="0" bind:value={w._draft.reps} />
                   <input class="inline-input" type="number" step="0.1" bind:value={w._draft.weight} />
-                  <div>
+                  <div class="actions">
                     {#if w.workout_id}
-                      <button on:click={() => saveEdit(w)}>Save</button>
-                      <button class="ml-sm" on:click={() => cancelEdit(w)}>Cancel</button>
+                      <button class="save-btn" on:click={() => saveEdit(w)}>Save</button>
+                      <button class="cancel-btn" on:click={() => cancelEdit(w)}>Cancel</button>
                     {:else}
-                      <button on:click={() => saveNewDateWorkout(w)}>Create</button>
-                      <button class="ml-sm" on:click={() => cancelEdit(w)}>Cancel</button>
+                      <button class="create-btn" on:click={() => saveNewDateWorkout(w)}>Create</button>
+                      <button class="cancel-btn" on:click={() => cancelEdit(w)}>Cancel</button>
                     {/if}
                   </div>
                 </div>
               {:else}
                 <div class="table-grid table-row">
-                  <div>{w.body_part}</div>
-                  <div>{w.exercise}</div>
-                  <div>{w.sets}</div>
-                  <div>{w.reps}</div>
-                  <div>{w.weight}</div>
-                  <div>
-                    <button on:click={() => beginEdit(w)}>Edit</button>
-                  </div>
+                  <div><input class="inline-input" type="text" value={w.body_part} disabled /></div>
+                  <div><input class="inline-input" type="text" value={w.exercise} disabled /></div>
+                  <div><input class="inline-input" type="text" value={w.sets} disabled /></div>
+                  <div><input class="inline-input" type="text" value={w.reps} disabled /></div>
+                  <div><input class="inline-input" type="text" value={w.weight || ''} disabled /></div>
+                  <div class="actions"><button on:click={() => beginEdit(w)}>Edit</button></div>
                 </div>
               {/if}
             {/each}
@@ -921,21 +924,19 @@
                   <input type="number" min="0" bind:value={g._draft.sets} />
                   <input type="number" min="0" bind:value={g._draft.reps} />
                   <input type="number" step="0.1" bind:value={g._draft.weight} />
-                  <div>
-                    <button on:click={() => saveGoalCalEdit(g)}>Save</button>
-                    <button class="ml-sm" on:click={() => cancelGoalCalEdit(g)}>Cancel</button>
+                  <div class="actions">
+                    <button class="save-btn" on:click={() => saveGoalCalEdit(g)}>Save</button>
+                    <button class="cancel-btn" on:click={() => cancelGoalCalEdit(g)}>Cancel</button>
                   </div>
                 </div>
               {:else}
                 <div class="table-grid table-row">
-                  <div>{g.body_part}</div>
-                  <div>{g.exercise}</div>
-                  <div>{g.sets}</div>
-                  <div>{g.reps}</div>
-                  <div>{g.weight}</div>
-                  <div>
-                    <button on:click={() => beginGoalCalEdit(g)}>Edit</button>
-                  </div>
+                  <div><input class="inline-input" type="text" value={g.body_part} disabled /></div>
+                  <div><input class="inline-input" type="text" value={g.exercise} disabled /></div>
+                  <div><input class="inline-input" type="text" value={g.sets} disabled /></div>
+                  <div><input class="inline-input" type="text" value={g.reps} disabled /></div>
+                  <div><input class="inline-input" type="text" value={g.weight || ''} disabled /></div>
+                  <div class="actions"><button on:click={() => beginGoalCalEdit(g)}>Edit</button></div>
                 </div>
               {/if}
             {/each}

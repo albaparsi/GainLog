@@ -100,3 +100,8 @@ button:focus-visible {
 .ml-md { margin-left:0.5rem !important; }
 .ml-lg { margin-left:1rem !important; }
 
+/* Table alignment refinements */
+table.track-table th { text-align:left; padding:0 10px 0 6px; }
+table.track-table td { padding:0 10px; }
+.inline-input { padding-left:6px; }
+
