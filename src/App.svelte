@@ -184,6 +184,11 @@
   let editingDate = false; // toggles edit mode for date workouts
   let loadingGoals = false;
   let dateGoals = []; // goals for selected date
+  // Today reference for calendar highlighting
+  const __todayRef = new Date();
+  const todayYear = __todayRef.getFullYear();
+  const todayMonth = __todayRef.getMonth();
+  const todayDay = __todayRef.getDate();
 
   function initCalendar() {
     const now = new Date();
@@ -576,6 +581,10 @@
   .cal-cell.selected { background: var(--color-accent); color:#fff; box-shadow:0 4px 10px rgba(0,0,0,0.15); }
   .cal-day-number { font-size:1.3rem; font-weight:600; line-height:1; color:#333; }
   .cal-cell.selected .cal-day-number { color:#fff; }
+  /* Today marker */
+  .cal-cell.today:not(.selected) { position:relative; }
+  .cal-cell.today:not(.selected)::after { content:''; position:absolute; top:6px; right:6px; width:10px; height:10px; border-radius:50%; background:var(--color-accent); box-shadow:0 0 0 2px var(--color-panel); }
+  .cal-cell.selected.today { box-shadow:0 0 0 3px var(--color-accent-hover) inset, 0 4px 10px rgba(0,0,0,0.15); }
   /* marker style reserved (currently unused) */
   @media (max-width: 900px) {
     .calendar-grid { grid-template-columns: repeat(7, 1fr); gap:6px; }
@@ -828,7 +837,7 @@
         {#if d === null}
           <div></div>
         {:else}
-          <button type="button" class="cal-cell {selectedDate && Number(selectedDate.slice(-2))===d && new Date(selectedDate).getMonth()===calendarMonth ? 'selected' : ''}" on:click={() => selectCalendarDay(d)}>
+          <button type="button" class="cal-cell {selectedDate && Number(selectedDate.slice(-2))===d && new Date(selectedDate).getMonth()===calendarMonth ? 'selected' : ''} {calendarYear===todayYear && calendarMonth===todayMonth && d===todayDay ? 'today' : ''}" on:click={() => selectCalendarDay(d)}>
             <span class="cal-day-number">{d}</span>
           </button>
         {/if}
