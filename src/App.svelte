@@ -320,6 +320,12 @@
     });
   }
   function cancelEdit(w) {
+    // If this is a newly added unsaved calendar row, remove it entirely
+    if (!w.workout_id) {
+      dateWorkouts = dateWorkouts.filter(item => item !== w);
+      return;
+    }
+    // Otherwise just exit edit mode
     dateWorkouts = dateWorkouts.map(item => item === w ? { ...item, _editing: false, _draft: undefined } : item);
   }
   async function saveEdit(w) {
@@ -615,6 +621,15 @@
   }
   .table-header { font-weight: bold; font-size: 0.85rem; }
   .table-row { margin-top: 4px; }
+
+  /* Override nav/theme button styling to accent background with white text */
+  .theme-btn {
+    background: var(--color-accent);
+    color: #fff;
+    border: 1px solid var(--color-accent);
+  }
+  .theme-btn:hover { filter: brightness(0.9); }
+  .nav-btn.active { background: var(--color-accent); color:#fff; box-shadow:0 0 0 2px rgba(255,255,255,0.6) inset; }
 </style>
 
 <!-- Global Theme / Nav -->
@@ -920,11 +935,11 @@
             {#each dateWorkouts as w}
               {#if w._editing}
                 <div class="table-grid table-row">
-                  <input type="text" bind:value={w._draft.body_part} />
-                  <input type="text" bind:value={w._draft.exercise} />
-                  <input type="number" min="0" bind:value={w._draft.sets} />
-                  <input type="number" min="0" bind:value={w._draft.reps} />
-                  <input type="number" step="0.1" bind:value={w._draft.weight} />
+                  <input class="inline-input" type="text" bind:value={w._draft.body_part} />
+                  <input class="inline-input" type="text" bind:value={w._draft.exercise} />
+                  <input class="inline-input" type="number" min="0" bind:value={w._draft.sets} />
+                  <input class="inline-input" type="number" min="0" bind:value={w._draft.reps} />
+                  <input class="inline-input" type="number" step="0.1" bind:value={w._draft.weight} />
                   <div>
                     {#if w.workout_id}
                       <button on:click={() => saveEdit(w)}>Save</button>
