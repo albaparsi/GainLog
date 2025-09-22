@@ -42,11 +42,15 @@
 
   // Goals page state
   let goalMuscleGroup = '';
-  function createGoalTemplateRow() { return { name: '', sets: 1, reps: 1, weight: '', editing: false, submitted: false, isTemplate: true }; }
+  function createGoalTemplateRow() { return { name: '', sets: 1, reps: 1, weight: '', editing: false, submitted: false, isTemplate: true, workout_id: null }; }
   let goalRows = [ createGoalTemplateRow() ];
+  let savingGoals = false;
+  let goalsSavedMsg = false;
+  let goalSaveCounts = { success:0, failed:0 };
+  let showDoneGoalsPrompt = false;
 
   function goGoals() { if (page !== 'goals') page = 'goals'; }
-  function addGoalRow() { goalRows = [...goalRows, { name:'', sets:1, reps:1, weight:'', editing:false, submitted:false, isTemplate:false }]; }
+  function addGoalRow() { goalRows = [...goalRows, { name:'', sets:1, reps:1, weight:'', editing:false, submitted:false, isTemplate:false, workout_id:null }]; }
   function beginGoalEdit(idx) { goalRows = goalRows.map((r,i)=> i===idx ? { ...r, editing:true } : r); }
   function cancelGoalEdit(idx) {
     const row = goalRows[idx];
@@ -58,6 +62,84 @@
     const row = goalRows[idx];
     if (!row || !row.name.trim()) return;
     goalRows = goalRows.map((r,i)=> i===idx ? { ...r, submitted:true, editing:false, isTemplate:false } : r);
+  }
+  let goalFailedRows = [];
+  let goalFailedReasons = {};
+  function localISO() {
+    const d = new Date();
+    const yr = d.getFullYear();
+    const mo = String(d.getMonth()+1).padStart(2,'0');
+    const da = String(d.getDate()).padStart(2,'0');
+    return `${yr}-${mo}-${da}`;
+  }
+  async function saveAllGoals() {
+    if (!userId) { alert('Create a user first.'); return; }
+    const todayIso = localISO();
+    let success=0, failed=0; goalFailedRows = [];
+    goalFailedReasons = {};
+    for (let i=0;i<goalRows.length;i++) {
+      const gr = goalRows[i];
+      if (!gr.name || !gr.name.trim()) continue;
+      const payload = {
+        user_id: userId,
+        exercise: gr.name.trim(),
+        sets: Number(gr.sets) || null,
+        reps: Number(gr.reps) || null,
+        weight: gr.weight ? extractWeightNumber(gr.weight) : null,
+        body_part: goalMuscleGroup || 'General',
+        set_goal_date: todayIso
+      };
+      try {
+        if (gr.workout_id) {
+          const res = await fetch(`${API_BASE}/goals/${gr.workout_id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+          if (!res.ok) {
+            const errTxt = await res.text().catch(()=> '');
+            throw new Error(errTxt || 'Update failed');
+          }
+          success++;
+        } else {
+          const res = await fetch(`${API_BASE}/goals`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+          if (!res.ok) {
+            const errTxt = await res.text().catch(()=> '');
+            // Specific hint for 404 route not found returning HTML
+            if (res.status === 404 || /Cannot POST \/api\/goals/.test(errTxt)) {
+              throw new Error('Endpoint /api/goals not found. Restart backend with "npm run dev:server" or "npm run dev:full" after saving server.js');
+            }
+            throw new Error(errTxt || 'Create failed');
+          }
+          const data = await res.json();
+          goalRows[i] = { ...goalRows[i], workout_id: data.goal_id || data.workout_id };
+          success++;
+        }
+        goalRows[i] = { ...goalRows[i], submitted:true, isTemplate:false };
+      } catch(e) {
+        console.error('Failed saving goal row', gr, e);
+        failed++;
+        goalFailedRows.push(gr.name.trim());
+        goalFailedReasons[gr.name.trim()] = e.message || 'Unknown error';
+      }
+    }
+    goalSaveCounts = { success, failed };
+    goalRows = [...goalRows];
+  }
+  function extractWeightNumber(val) {
+    if (val == null) return null;
+    const m = String(val).match(/\d+(?:\.\d+)?/);
+    return m ? parseFloat(m[0]) : null;
+  }
+  function doneGoals() { if (!hasGoalInputs) return; showDoneGoalsPrompt = true; }
+  async function confirmDoneGoals(yes) {
+    showDoneGoalsPrompt = false;
+    if (!yes) return;
+    if (savingGoals) return;
+    savingGoals = true;
+    await saveAllGoals();
+    savingGoals = false;
+    // Clear inputs and reset rows after saving
+    goalMuscleGroup = '';
+    goalRows = [ createGoalTemplateRow() ];
+    goalsSavedMsg = true;
+    setTimeout(()=> goalsSavedMsg = false, 3000);
   }
   function removeGoalRow(idx) {
     const row = goalRows[idx];
@@ -77,6 +159,10 @@
     createTemplateRow()
   ];
 
+  // Guard flags: whether there is any user input to save
+  $: hasWorkoutInputs = Array.isArray(exercises) && exercises.some(ex => ex && typeof ex.name === 'string' && ex.name.trim());
+  $: hasGoalInputs = Array.isArray(goalRows) && goalRows.some(gx => gx && typeof gx.name === 'string' && gx.name.trim());
+
   let showDonePrompt = false;
   let showSavedMsg = false;
 
@@ -91,6 +177,8 @@
   let loadingWorkouts = false;
   let dateWorkouts = []; // workouts for selected date
   let editingDate = false; // toggles edit mode for date workouts
+  let loadingGoals = false;
+  let dateGoals = []; // goals for selected date
 
   function initCalendar() {
     const now = new Date();
@@ -128,7 +216,7 @@
     const mm = String(calendarMonth + 1).padStart(2,'0');
     const dd = String(day).padStart(2,'0');
     selectedDate = `${calendarYear}-${mm}-${dd}`;
-    await fetchWorkoutsForDate();
+  await Promise.all([fetchWorkoutsForDate(), fetchGoalsForDate()]);
   }
 
   async function fetchWorkoutsForDate() {
@@ -145,6 +233,59 @@
       alert('Unable to load workouts for date');
     } finally {
       loadingWorkouts = false;
+    }
+  }
+
+  async function fetchGoalsForDate() {
+    if (!userId || !selectedDate) return;
+    loadingGoals = true;
+    try {
+      const res = await fetch(`${API_BASE}/users/${userId}/goals?date=${selectedDate}`);
+      if (!res.ok) throw new Error('Failed to load goals');
+      dateGoals = (await res.json()).map(g => ({ ...g, _editing:false, _draft: null }));
+      if (!dateGoals.length) {
+        // Fallback: fetch all then filter client-side (handles legacy rows with different date column)
+        const allRes = await fetch(`${API_BASE}/users/${userId}/goals`);
+        if (allRes.ok) {
+          const all = (await allRes.json()).map(g => ({ ...g, _editing:false, _draft:null }));
+          dateGoals = all.filter(g => (g.set_goal_date || g.workout_date) === selectedDate);
+        }
+      }
+      console.log('[Goals] Fetched for', selectedDate, 'count=', dateGoals.length);
+    } catch (e) {
+      console.error(e);
+      // silent or alert depending on preference
+    } finally {
+      loadingGoals = false;
+    }
+  }
+
+  function beginGoalCalEdit(g) {
+    dateGoals = dateGoals.map(item => item===g ? { ...item, _editing:true, _draft:{
+      exercise: item.exercise || '',
+      sets: item.sets || 0,
+      reps: item.reps || 0,
+      weight: item.weight ?? null,
+      body_part: item.body_part || (goalMuscleGroup || 'General'),
+      set_goal_date: item.set_goal_date || item.workout_date || selectedDate
+    }} : item);
+  }
+  function cancelGoalCalEdit(g) {
+    dateGoals = dateGoals.map(item => item===g ? { ...item, _editing:false, _draft:null } : item);
+  }
+  async function saveGoalCalEdit(g) {
+    const target = dateGoals.find(item => item===g);
+    if (!target || !target._draft) return;
+    try {
+      const payload = { ...target._draft };
+      const id = target.goal_id || target.workout_id; // support legacy naming
+      const res = await fetch(`${API_BASE}/goals/${id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+      if (!res.ok) throw new Error('Update failed');
+      const updated = await res.json();
+      dateGoals = dateGoals.map(item => item===g ? { ...item, ...updated, _editing:false, _draft:null } : item);
+    } catch(e) {
+      console.error(e);
+      alert('Unable to update goal');
     }
   }
 
@@ -271,7 +412,7 @@
 
   async function saveAllExercises() {
     if (!userId) { alert('Create a user first.'); return; }
-    const todayIso = joinDate ? new Date(joinDate).toISOString().slice(0,10) : new Date().toISOString().slice(0,10);
+  const todayIso = localISO();
     for (let i=0;i<exercises.length;i++) {
       const ex = exercises[i];
       if (!ex.name.trim()) continue;
@@ -366,16 +507,19 @@
   // workoutQuestion will be captured directly from input, no submit button
 
   function doneTracking() {
+    if (!hasWorkoutInputs) return;
     showDonePrompt = true;
   }
 
-  function confirmDoneTracking(yes) {
+  async function confirmDoneTracking(yes) {
     showDonePrompt = false;
-    if (yes) {
-  saveAllExercises();
-      showSavedMsg = true;
-      setTimeout(() => showSavedMsg = false, 3000);
-    }
+    if (!yes) return;
+    await saveAllExercises();
+    // Clear inputs and reset rows after saving
+    workoutQuestion = '';
+    exercises = [ createTemplateRow() ];
+    showSavedMsg = true;
+    setTimeout(() => showSavedMsg = false, 3000);
   }
 
   $: activeTime = `${Math.floor(activeSeconds/60)}m ${activeSeconds%60}s`;
@@ -444,6 +588,15 @@
   .prompt-box { min-height:42px; }
   table.track-table th { color: var(--color-text); font-weight:600; }
   .action-btns { display:flex; gap:6px; justify-content:flex-start; }
+  /* Common calendar table layout */
+  .table-grid {
+    display: grid;
+    grid-template-columns: 110px 100px 80px 80px 90px 130px; /* same widths everywhere */
+    gap: 4px;
+    align-items: center;
+  }
+  .table-header { font-weight: bold; font-size: 0.85rem; }
+  .table-row { margin-top: 4px; }
 </style>
 
 <!-- Global Theme / Nav -->
@@ -574,7 +727,30 @@
       </table>
       <div class="tracker-footer">
         <button on:click={addGoalRow}>Add Goal Exercise</button>
+        <button on:click={doneGoals} disabled={!hasGoalInputs || savingGoals}>{savingGoals ? 'Saving...' : 'Done Setting Goals'}</button>
       </div>
+      {#if showDoneGoalsPrompt}
+        <div class="prompt-box" style="margin-top:1rem;">
+          <span>Are you done setting goals?</span>
+          <button style="margin-left:1rem;" on:click={() => confirmDoneGoals(true)}>Yes</button>
+          <button style="margin-left:0.5rem;" on:click={() => confirmDoneGoals(false)}>No</button>
+        </div>
+      {/if}
+      {#if goalsSavedMsg}
+        <div style="margin-top:1rem; font-weight:bold; color:{goalSaveCounts.failed ? 'darkred' : 'green'};">
+          Goals processed: Saved {goalSaveCounts.success}{goalSaveCounts.failed ? `, Failed ${goalSaveCounts.failed}` : ''}.
+          {#if goalSaveCounts.failed && goalFailedRows.length}
+            <div style="margin-top:0.4rem; font-size:0.85rem; font-weight:500; color:darkred;">
+              Failed:
+              <ul style="margin:4px 0 0 16px; padding:0; list-style:disc;">
+                {#each goalFailedRows as gname}
+                  <li>{gname}{goalFailedReasons[gname] ? ` - ${goalFailedReasons[gname]}` : ''}</li>
+                {/each}
+              </ul>
+            </div>
+          {/if}
+        </div>
+      {/if}
     </div>
   </div>
 {/if}
@@ -656,7 +832,7 @@
       </table>
       <div class="tracker-footer">
         <button on:click={addExerciseRow}>Add Exercise</button>
-        <button on:click={doneTracking}>Done Tracking</button>
+        <button on:click={doneTracking} disabled={!hasWorkoutInputs}>Done Tracking</button>
       </div>
       {#if showDonePrompt}
         <div class="prompt-box" style="margin-top:1rem;">
@@ -713,7 +889,7 @@
         {/if}
         {#if dateWorkouts.length}
           <div style="margin-top:0.5rem;">
-            <div style="display:grid; grid-template-columns: 120px 100px 100px 100px 120px 160px; gap:4px; font-weight:bold; font-size:0.85rem;">
+            <div class="table-grid table-header">
               <div>Body Part</div>
               <div>Exercise</div>
               <div>Sets</div>
@@ -723,34 +899,77 @@
             </div>
             {#each dateWorkouts as w}
               {#if w._editing}
-                <div style="display:grid; grid-template-columns: 120px 100px 100px 100px 100px 160px; gap:4px; margin-top:4px;">
+                <div class="table-grid table-row">
                   <input type="text" bind:value={w._draft.body_part} />
                   <input type="text" bind:value={w._draft.exercise} />
                   <input type="number" min="0" bind:value={w._draft.sets} />
                   <input type="number" min="0" bind:value={w._draft.reps} />
                   <input type="number" step="0.1" bind:value={w._draft.weight} />
-                  {#if w.workout_id}
-                    <div>
+                  <div>
+                    {#if w.workout_id}
                       <button on:click={() => saveEdit(w)}>Save</button>
-                      <button on:click={() => cancelEdit(w)} style="margin-left:4px;">Cancel</button>
-                    </div>
-                  {:else}
-                    <div>
+                      <button style="margin-left:4px;" on:click={() => cancelEdit(w)}>Cancel</button>
+                    {:else}
                       <button on:click={() => saveNewDateWorkout(w)}>Create</button>
-                      <button on:click={() => cancelEdit(w)} style="margin-left:4px;">Cancel</button>
-                    </div>
-                  {/if}
+                      <button style="margin-left:4px;" on:click={() => cancelEdit(w)}>Cancel</button>
+                    {/if}
+                  </div>
                 </div>
               {:else}
-        <div style="display:grid; grid-template-columns: 120px 100px 100px 100px 100px 160px; gap:4px; margin-top:4px;">
+                <div class="table-grid table-row">
                   <div>{w.body_part}</div>
                   <div>{w.exercise}</div>
                   <div>{w.sets}</div>
                   <div>{w.reps}</div>
                   <div>{w.weight}</div>
                   <div>
-          <button on:click={() => beginEdit(w)}>Edit</button>
-          <button style="margin-left:6px;" on:click={() => removeDateWorkout(w)}>Remove</button>
+                    <button on:click={() => beginEdit(w)}>Edit</button>
+                  </div>
+                </div>
+              {/if}
+            {/each}
+          </div>
+        {/if}
+      </div>
+      <div style="margin-top:1.5rem;">
+        <h3 style="margin:0 0 0.5rem 0;">Goals on {selectedDate}</h3>
+        {#if loadingGoals}
+          <div>Loading...</div>
+        {:else if !dateGoals.length}
+          <div style="margin-top:0.5rem;">No goals yet.</div>
+        {/if}
+        {#if dateGoals.length}
+          <div style="margin-top:0.5rem;">
+            <div class="table-grid table-header">
+              <div>Body Part</div>
+              <div>Exercise</div>
+              <div>Sets</div>
+              <div>Reps</div>
+              <div>Weight</div>
+              <div>Actions</div>
+            </div>
+            {#each dateGoals as g}
+              {#if g._editing}
+                <div class="table-grid table-row">
+                  <input type="text" bind:value={g._draft.body_part} />
+                  <input type="text" bind:value={g._draft.exercise} />
+                  <input type="number" min="0" bind:value={g._draft.sets} />
+                  <input type="number" min="0" bind:value={g._draft.reps} />
+                  <input type="number" step="0.1" bind:value={g._draft.weight} />
+                  <div>
+                    <button on:click={() => saveGoalCalEdit(g)}>Save</button>
+                    <button style="margin-left:4px;" on:click={() => cancelGoalCalEdit(g)}>Cancel</button>
+                  </div>
+                </div>
+              {:else}
+                <div class="table-grid table-row">
+                  <div>{g.body_part}</div>
+                  <div>{g.exercise}</div>
+                  <div>{g.sets}</div>
+                  <div>{g.reps}</div>
+                  <div>{g.weight}</div>
+                  <div>
+                    <button on:click={() => beginGoalCalEdit(g)}>Edit</button>
                   </div>
                 </div>
               {/if}
