@@ -131,8 +131,9 @@
   }
   function removeGoalRow(idx) {
     const row = goalRows[idx];
-    if (!row || row.isTemplate) return;
-    goalRows = goalRows.filter((_,i)=> i!==idx);
+  if (!row) return;
+  if (goalRows.length <= 1) return; // keep at least one row
+  goalRows = goalRows.filter((_,i)=> i!==idx);
   }
 
   function ordinal(n) {
@@ -433,11 +434,9 @@
   function removeExercise(idx) {
     const row = exercises[idx];
     if (!row) return;
-    if (row.isTemplate) return; // keep initial template row
-    if (row.workout_id) {
-      // Placeholder for future backend DELETE call
-    }
-    exercises = exercises.filter((_,i)=> i!==idx);
+  if (exercises.length <= 1) return; // keep at least one row
+  // Placeholder for future backend DELETE call if row.workout_id
+  exercises = exercises.filter((_,i)=> i!==idx);
   }
 
   onMount(() => {
@@ -701,9 +700,7 @@
               </td>
               <td>
                 <div class="action-btns">
-                  {#if !gx.isTemplate}
-                    <button on:click={() => removeGoalRow(gidx)}>Remove</button>
-                  {/if}
+                  <button disabled={goalRows.length === 1} on:click={() => removeGoalRow(gidx)}>Remove</button>
                 </div>
               </td>
             </tr>
@@ -782,9 +779,7 @@
               </td>
               <td>
                 <div class="action-btns">
-                  {#if !ex.isTemplate}
-                    <button on:click={() => removeExercise(idx)}>Remove</button>
-                  {/if}
+                  <button disabled={exercises.length === 1} on:click={() => removeExercise(idx)}>Remove</button>
                 </div>
               </td>
             </tr>
