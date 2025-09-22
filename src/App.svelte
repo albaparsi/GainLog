@@ -51,18 +51,6 @@
 
   function goGoals() { if (page !== 'goals') page = 'goals'; }
   function addGoalRow() { goalRows = [...goalRows, { name:'', sets:1, reps:1, weight:'', editing:false, submitted:false, isTemplate:false, workout_id:null }]; }
-  function beginGoalEdit(idx) { goalRows = goalRows.map((r,i)=> i===idx ? { ...r, editing:true } : r); }
-  function cancelGoalEdit(idx) {
-    const row = goalRows[idx];
-    if (!row) return;
-    if (!row.isTemplate && !row.submitted && !row.name.trim()) { goalRows = goalRows.filter((_,i)=> i!==idx); return; }
-    goalRows = goalRows.map((r,i)=> i===idx ? { ...r, editing:false } : r);
-  }
-  function persistGoalRow(idx) {
-    const row = goalRows[idx];
-    if (!row || !row.name.trim()) return;
-    goalRows = goalRows.map((r,i)=> i===idx ? { ...r, submitted:true, editing:false, isTemplate:false } : r);
-  }
   let goalFailedRows = [];
   let goalFailedReasons = {};
   function localISO() {
@@ -159,9 +147,25 @@
     createTemplateRow()
   ];
 
-  // Guard flags: whether there is any user input to save
-  $: hasWorkoutInputs = Array.isArray(exercises) && exercises.some(ex => ex && typeof ex.name === 'string' && ex.name.trim());
-  $: hasGoalInputs = Array.isArray(goalRows) && goalRows.some(gx => gx && typeof gx.name === 'string' && gx.name.trim());
+  // Guard flags: require full set of required fields before enabling Done buttons
+  // Tracking requires: workoutQuestion + at least one exercise row with name, sets>0, reps>0, weight non-empty
+  $: hasWorkoutInputs = !!workoutQuestion.trim() && Array.isArray(exercises) && exercises.some(ex => {
+    if (!ex) return false;
+    const nameOk = typeof ex.name === 'string' && ex.name.trim();
+    const setsOk = Number(ex.sets) > 0;
+    const repsOk = Number(ex.reps) > 0;
+    const weightOk = typeof ex.weight === 'string' ? ex.weight.trim() : (ex.weight !== null && ex.weight !== undefined && ex.weight !== '');
+    return nameOk && setsOk && repsOk && weightOk;
+  });
+  // Goals requires: goalMuscleGroup + at least one goal row with name, sets>0, reps>0, weight non-empty
+  $: hasGoalInputs = !!goalMuscleGroup.trim() && Array.isArray(goalRows) && goalRows.some(gx => {
+    if (!gx) return false;
+    const nameOk = typeof gx.name === 'string' && gx.name.trim();
+    const setsOk = Number(gx.sets) > 0;
+    const repsOk = Number(gx.reps) > 0;
+    const weightOk = typeof gx.weight === 'string' ? gx.weight.trim() : (gx.weight !== null && gx.weight !== undefined && gx.weight !== '');
+    return nameOk && setsOk && repsOk && weightOk;
+  });
 
   let showDonePrompt = false;
   let showSavedMsg = false;
@@ -391,29 +395,6 @@
 
   function addExerciseRow() {
     exercises = [...exercises, { name: '', sets: 1, reps: 1, weight: '', editing: false, submitted: false, isTemplate: false }];
-  }
-
-  function beginExerciseEdit(idx) {
-    exercises = exercises.map((ex,i)=> i===idx ? { ...ex, editing:true } : ex);
-  }
-
-  function cancelExerciseEdit(idx) {
-    const row = exercises[idx];
-    if (!row) return;
-    // If new unsaved non-template row and cancelled empty, remove it
-    if (!row.isTemplate && !row.submitted && !row.name.trim()) {
-      exercises = exercises.filter((_,i)=> i!==idx);
-      return;
-    }
-    exercises = exercises.map((ex,i)=> i===idx ? { ...ex, editing:false } : ex);
-  }
-
-  async function persistExercise(idx) {
-    const row = exercises[idx];
-    if (!row) return;
-    if (!row.name.trim()) return; // don't save empty
-    // Local-only update; mark as submitted but no backend until Done Tracking
-    exercises = exercises.map((ex,i)=> i===idx ? { ...ex, submitted:true, editing:false, isTemplate:false } : ex);
   }
 
   async function saveAllExercises() {
@@ -701,51 +682,27 @@
         </thead>
         <tbody>
           {#each goalRows as gx, gidx}
-            <tr class:{editing:gx.editing}>
+            <tr>
               <td>
-                {#if gx.editing}
-                  <input class="inline-input" type="text" bind:value={goalRows[gidx].name} />
-                {:else}
-                  <input class="inline-input" type="text" value={gx.name || 'Bench Press'} disabled />
-                {/if}
+                <input class="inline-input" type="text" bind:value={goalRows[gidx].name} placeholder="Exercise" />
               </td>
               <td class="numeric">
-                {#if gx.editing}
-                  <select class="inline-input" bind:value={goalRows[gidx].sets}>
-                    {#each setsOptions as n}<option value={n}>{n}</option>{/each}
-                  </select>
-                {:else}
-                  <select class="inline-input" disabled>
-                    {#each setsOptions as n}<option value={n} selected={n===(gx.sets||3)}>{n}</option>{/each}
-                  </select>
-                {/if}
+                <select class="inline-input" bind:value={goalRows[gidx].sets}>
+                  {#each setsOptions as n}<option value={n}>{n}</option>{/each}
+                </select>
               </td>
               <td class="numeric">
-                {#if gx.editing}
-                  <select class="inline-input" bind:value={goalRows[gidx].reps}>
-                    {#each repsOptions as n}<option value={n}>{n}</option>{/each}
-                  </select>
-                {:else}
-                  <select class="inline-input" disabled>
-                    {#each repsOptions as n}<option value={n} selected={n===(gx.reps||10)}>{n}</option>{/each}
-                  </select>
-                {/if}
+                <select class="inline-input" bind:value={goalRows[gidx].reps}>
+                  {#each repsOptions as n}<option value={n}>{n}</option>{/each}
+                </select>
               </td>
               <td class="numeric">
-                {#if gx.editing}
-                  <input class="inline-input" type="text" bind:value={goalRows[gidx].weight} />
-                {:else}
-                  <input class="inline-input" type="text" value={gx.weight || '135 lb'} disabled />
-                {/if}
+                <input class="inline-input" type="text" bind:value={goalRows[gidx].weight} placeholder="Weight" />
               </td>
               <td>
                 <div class="action-btns">
-                  {#if gx.editing}
-                    <button on:click={() => persistGoalRow(gidx)}>Save</button>
-                    <button on:click={() => cancelGoalEdit(gidx)}>Cancel</button>
-                  {:else}
-                    <button on:click={() => beginGoalEdit(gidx)}>Edit</button>
-                    {#if !gx.isTemplate}<button on:click={() => removeGoalRow(gidx)}>Remove</button>{/if}
+                  {#if !gx.isTemplate}
+                    <button on:click={() => removeGoalRow(gidx)}>Remove</button>
                   {/if}
                 </div>
               </td>
@@ -806,51 +763,27 @@
         </thead>
         <tbody>
           {#each exercises as ex, idx}
-            <tr class:{editing:ex.editing}>
+            <tr>
               <td>
-                {#if ex.editing}
-                  <input class="inline-input" type="text" bind:value={exercises[idx].name} />
-                {:else}
-                  <input class="inline-input" type="text" value={ex.name || 'Bench Press'} disabled />
-                {/if}
+                <input class="inline-input" type="text" bind:value={exercises[idx].name} placeholder="Exercise" />
               </td>
               <td class="numeric">
-                {#if ex.editing}
-                  <select class="inline-input" bind:value={exercises[idx].sets}>
-                    {#each setsOptions as n}<option value={n}>{ordinal(n)}</option>{/each}
-                  </select>
-                {:else}
-                  <select class="inline-input" disabled>
-                    {#each setsOptions as n}<option value={n} selected={n===(ex.sets||3)}>{ordinal(n)}</option>{/each}
-                  </select>
-                {/if}
+                <select class="inline-input" bind:value={exercises[idx].sets}>
+                  {#each setsOptions as n}<option value={n}>{ordinal(n)}</option>{/each}
+                </select>
               </td>
               <td class="numeric">
-                {#if ex.editing}
-                  <select class="inline-input" bind:value={exercises[idx].reps}>
-                    {#each repsOptions as n}<option value={n}>{n}</option>{/each}
-                  </select>
-                {:else}
-                  <select class="inline-input" disabled>
-                    {#each repsOptions as n}<option value={n} selected={n===(ex.reps||10)}>{n}</option>{/each}
-                  </select>
-                {/if}
+                <select class="inline-input" bind:value={exercises[idx].reps}>
+                  {#each repsOptions as n}<option value={n}>{n}</option>{/each}
+                </select>
               </td>
               <td class="numeric">
-                {#if ex.editing}
-                  <input class="inline-input" type="text" bind:value={exercises[idx].weight} />
-                {:else}
-                  <input class="inline-input" type="text" value={ex.weight || '135 lb'} disabled />
-                {/if}
+                <input class="inline-input" type="text" bind:value={exercises[idx].weight} placeholder="Weight" />
               </td>
               <td>
                 <div class="action-btns">
-                  {#if ex.editing}
-                    <button on:click={() => persistExercise(idx)}>Save</button>
-                    <button on:click={() => cancelExerciseEdit(idx)}>Cancel</button>
-                  {:else}
-                    <button on:click={() => beginExerciseEdit(idx)}>Edit</button>
-                    {#if !ex.isTemplate}<button on:click={() => removeExercise(idx)}>Remove</button>{/if}
+                  {#if !ex.isTemplate}
+                    <button on:click={() => removeExercise(idx)}>Remove</button>
                   {/if}
                 </div>
               </td>
