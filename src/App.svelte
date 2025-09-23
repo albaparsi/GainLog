@@ -313,6 +313,23 @@
     }
   }
 
+  function removeDateGoal(g) {
+    // If it's a new unsaved goal row (no id) just drop it from the dateGoals list
+    if (!g.id) {
+      dateGoals = dateGoals.filter(item => item !== g);
+      return;
+    }
+    if (!confirm('Remove this goal?')) return;
+    try {
+      goals = goals.filter(goal => goal.id !== g.id);
+      saveData();
+      dateGoals = dateGoals.filter(item => item !== g);
+    } catch (e) {
+      console.error(e);
+      alert('Unable to remove goal');
+    }
+  }
+
   function goCalendar() {
     if (page !== 'calendar') {
       initCalendar();
@@ -344,12 +361,12 @@
     });
   }
   function cancelEdit(w) {
-    // If this is a newly added unsaved calendar row, remove it entirely
-    if (!w.workout_id) {
+    // Only remove if it's a brand new unsaved row (no id AND no workout_id)
+    if (w.workout_id == null && w.id == null) {
       dateWorkouts = dateWorkouts.filter(item => item !== w);
       return;
     }
-    // Otherwise just exit edit mode
+    // For saved rows: just exit edit mode (discard draft changes)
     dateWorkouts = dateWorkouts.map(item => item === w ? { ...item, _editing: false, _draft: undefined } : item);
   }
   function saveEdit(w) {
@@ -388,6 +405,7 @@
     try {
       const workoutData = {
         id: workouts.length + 1,
+        workout_id: workouts.length + 1, // keep legacy naming for uniformity
         user_id: userId,
         ...target._draft,
         created_at: new Date().toISOString()
@@ -438,6 +456,7 @@
       
       const workoutData = {
         id: workouts.length + 1,
+        workout_id: workouts.length + 1, // add workout_id for calendar compatibility
         user_id: userId,
         exercise: ex.name.trim(),
         sets: ex.sets,
@@ -916,7 +935,7 @@
                   <div><input class="inline-input" type="text" value={w.sets} disabled /></div>
                   <div><input class="inline-input" type="text" value={w.reps} disabled /></div>
                   <div><input class="inline-input" type="text" value={w.weight || ''} disabled /></div>
-                  <div class="actions"><button on:click={() => beginEdit(w)}>Edit</button></div>
+                  <div class="actions"><button on:click={() => beginEdit(w)}>Edit</button><button on:click={() => removeDateWorkout(w)}>Remove</button></div>
                 </div>
               {/if}
             {/each}
@@ -943,11 +962,11 @@
             {#each dateGoals as g}
               {#if g._editing}
                 <div class="table-grid table-row">
-                  <input type="text" bind:value={g._draft.body_part} />
-                  <input type="text" bind:value={g._draft.exercise} />
-                  <input type="number" min="0" bind:value={g._draft.sets} />
-                  <input type="number" min="0" bind:value={g._draft.reps} />
-                  <input type="number" step="0.1" bind:value={g._draft.weight} />
+                  <input class="inline-input" type="text" bind:value={g._draft.body_part} />
+                  <input class="inline-input" type="text" bind:value={g._draft.exercise} />
+                  <input class="inline-input" type="number" min="0" bind:value={g._draft.sets} />
+                  <input class="inline-input" type="number" min="0" bind:value={g._draft.reps} />
+                  <input class="inline-input" type="number" step="0.1" bind:value={g._draft.weight} />
                   <div class="actions">
                     <button class="save-btn" on:click={() => saveGoalCalEdit(g)}>Save</button>
                     <button class="cancel-btn" on:click={() => cancelGoalCalEdit(g)}>Cancel</button>
@@ -960,7 +979,7 @@
                   <div><input class="inline-input" type="text" value={g.sets} disabled /></div>
                   <div><input class="inline-input" type="text" value={g.reps} disabled /></div>
                   <div><input class="inline-input" type="text" value={g.weight || ''} disabled /></div>
-                  <div class="actions"><button on:click={() => beginGoalCalEdit(g)}>Edit</button></div>
+                  <div class="actions"><button on:click={() => beginGoalCalEdit(g)}>Edit</button><button on:click={() => removeDateGoal(g)}>Remove</button></div>
                 </div>
               {/if}
             {/each}
