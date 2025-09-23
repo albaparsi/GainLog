@@ -60,46 +60,33 @@
     const da = String(d.getDate()).padStart(2,'0');
     return `${yr}-${mo}-${da}`;
   }
-  async function saveAllGoals() {
+  function saveAllGoals() {
     if (!userId) { alert('Create a user first.'); return; }
     const todayIso = localISO();
-    let success=0, failed=0; goalFailedRows = [];
+    let success=0, failed=0; 
+    goalFailedRows = [];
     goalFailedReasons = {};
+    
     for (let i=0;i<goalRows.length;i++) {
       const gr = goalRows[i];
       if (!gr.name || !gr.name.trim()) continue;
-      const payload = {
-        user_id: userId,
-        exercise: gr.name.trim(),
-        sets: Number(gr.sets) || null,
-        reps: Number(gr.reps) || null,
-        weight: gr.weight ? extractWeightNumber(gr.weight) : null,
-        body_part: goalMuscleGroup || 'General',
-        set_goal_date: todayIso
-      };
+      
       try {
-        if (gr.workout_id) {
-          const res = await fetch(`${API_BASE}/goals/${gr.workout_id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-          if (!res.ok) {
-            const errTxt = await res.text().catch(()=> '');
-            throw new Error(errTxt || 'Update failed');
-          }
-          success++;
-        } else {
-          const res = await fetch(`${API_BASE}/goals`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-          if (!res.ok) {
-            const errTxt = await res.text().catch(()=> '');
-            // Specific hint for 404 route not found returning HTML
-            if (res.status === 404 || /Cannot POST \/api\/goals/.test(errTxt)) {
-              throw new Error('Endpoint /api/goals not found. Restart backend with "npm run dev:server" or "npm run dev:full" after saving server.js');
-            }
-            throw new Error(errTxt || 'Create failed');
-          }
-          const data = await res.json();
-          goalRows[i] = { ...goalRows[i], workout_id: data.goal_id || data.workout_id };
-          success++;
-        }
-        goalRows[i] = { ...goalRows[i], submitted:true, isTemplate:false };
+        const goalData = {
+          id: goals.length + 1,
+          user_id: userId,
+          exercise: gr.name.trim(),
+          sets: Number(gr.sets) || null,
+          reps: Number(gr.reps) || null,
+          weight: gr.weight ? extractWeightNumber(gr.weight) : null,
+          body_part: goalMuscleGroup || 'General',
+          set_goal_date: todayIso,
+          created_at: new Date().toISOString()
+        };
+        
+        goals = [...goals, goalData];
+        goalRows[i] = { ...goalRows[i], workout_id: goalData.id, submitted:true, isTemplate:false };
+        success++;
       } catch(e) {
         console.error('Failed saving goal row', gr, e);
         failed++;
@@ -107,8 +94,10 @@
         goalFailedReasons[gr.name.trim()] = e.message || 'Unknown error';
       }
     }
+    
     goalSaveCounts = { success, failed };
     goalRows = [...goalRows];
+    saveData();
   }
   function extractWeightNumber(val) {
     if (val == null) return null;
@@ -172,7 +161,32 @@
   let showSavedMsg = false;
 
   let userId = null;
-  const API_BASE = 'http://localhost:5174/api';
+  
+  // Local data storage
+  let users = [];
+  let workouts = [];
+  let goals = [];
+  
+  // Load data from localStorage on startup
+  function loadData() {
+    try {
+      users = JSON.parse(localStorage.getItem('ft_users') || '[]');
+      workouts = JSON.parse(localStorage.getItem('ft_workouts') || '[]');
+      goals = JSON.parse(localStorage.getItem('ft_goals') || '[]');
+    } catch (e) {
+      console.error('Error loading data:', e);
+      users = [];
+      workouts = [];
+      goals = [];
+    }
+  }
+  
+  // Save data to localStorage
+  function saveData() {
+    localStorage.setItem('ft_users', JSON.stringify(users));
+    localStorage.setItem('ft_workouts', JSON.stringify(workouts));
+    localStorage.setItem('ft_goals', JSON.stringify(goals));
+  }
 
   // Calendar & historical editing state
   let selectedDate = null; // YYYY-MM-DD
@@ -229,15 +243,15 @@
   await Promise.all([fetchWorkoutsForDate(), fetchGoalsForDate()]);
   }
 
-  async function fetchWorkoutsForDate() {
+  function fetchWorkoutsForDate() {
     if (!userId || !selectedDate) return;
     loadingWorkouts = true;
+    
     try {
-      const res = await fetch(`${API_BASE}/users/${userId}/workouts?date=${selectedDate}`);
-      if (!res.ok) throw new Error('Failed to load workouts');
-      dateWorkouts = await res.json();
-      // Add local editing flags
-      dateWorkouts = dateWorkouts.map(w => ({ ...w, _editing: false }));
+      // Filter workouts for the selected date and user
+      dateWorkouts = workouts
+        .filter(w => w.user_id == userId && w.workout_date === selectedDate)
+        .map(w => ({ ...w, _editing: false }));
     } catch (e) {
       console.error(e);
       alert('Unable to load workouts for date');
@@ -246,25 +260,19 @@
     }
   }
 
-  async function fetchGoalsForDate() {
+  function fetchGoalsForDate() {
     if (!userId || !selectedDate) return;
     loadingGoals = true;
+    
     try {
-      const res = await fetch(`${API_BASE}/users/${userId}/goals?date=${selectedDate}`);
-      if (!res.ok) throw new Error('Failed to load goals');
-      dateGoals = (await res.json()).map(g => ({ ...g, _editing:false, _draft: null }));
-      if (!dateGoals.length) {
-        // Fallback: fetch all then filter client-side (handles legacy rows with different date column)
-        const allRes = await fetch(`${API_BASE}/users/${userId}/goals`);
-        if (allRes.ok) {
-          const all = (await allRes.json()).map(g => ({ ...g, _editing:false, _draft:null }));
-          dateGoals = all.filter(g => (g.set_goal_date || g.workout_date) === selectedDate);
-        }
-      }
+      // Filter goals for the selected date and user
+      dateGoals = goals
+        .filter(g => g.user_id == userId && g.set_goal_date === selectedDate)
+        .map(g => ({ ...g, _editing:false, _draft: null }));
+      
       console.log('[Goals] Fetched for', selectedDate, 'count=', dateGoals.length);
     } catch (e) {
       console.error(e);
-      // silent or alert depending on preference
     } finally {
       loadingGoals = false;
     }
@@ -283,16 +291,22 @@
   function cancelGoalCalEdit(g) {
     dateGoals = dateGoals.map(item => item===g ? { ...item, _editing:false, _draft:null } : item);
   }
-  async function saveGoalCalEdit(g) {
+  function saveGoalCalEdit(g) {
     const target = dateGoals.find(item => item===g);
     if (!target || !target._draft) return;
+    
     try {
       const payload = { ...target._draft };
-      const id = target.goal_id || target.workout_id; // support legacy naming
-      const res = await fetch(`${API_BASE}/goals/${id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-      if (!res.ok) throw new Error('Update failed');
-      const updated = await res.json();
-      dateGoals = dateGoals.map(item => item===g ? { ...item, ...updated, _editing:false, _draft:null } : item);
+      const id = target.id;
+      
+      // Update in the main goals array
+      const goalIndex = goals.findIndex(goal => goal.id === id);
+      if (goalIndex !== -1) {
+        goals[goalIndex] = { ...goals[goalIndex], ...payload };
+        saveData();
+      }
+      
+      dateGoals = dateGoals.map(item => item===g ? { ...item, ...payload, _editing:false, _draft:null } : item);
     } catch(e) {
       console.error(e);
       alert('Unable to update goal');
@@ -338,19 +352,22 @@
     // Otherwise just exit edit mode
     dateWorkouts = dateWorkouts.map(item => item === w ? { ...item, _editing: false, _draft: undefined } : item);
   }
-  async function saveEdit(w) {
+  function saveEdit(w) {
     const target = dateWorkouts.find(item => item === w);
     if (!target || !target._draft) return;
+    
     try {
       const payload = { ...target._draft };
-      const res = await fetch(`${API_BASE}/workouts/${target.workout_id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      if (!res.ok) throw new Error('Update failed');
-      const updated = await res.json();
-      dateWorkouts = dateWorkouts.map(item => item === w ? { ...item, ...updated, _editing: false, _draft: undefined } : item);
+      
+      // Update in the main workouts array
+      const workoutIndex = workouts.findIndex(workout => workout.id === target.id);
+      if (workoutIndex !== -1) {
+        workouts[workoutIndex] = { ...workouts[workoutIndex], ...payload };
+        saveData();
+      }
+      
+      // Update in the display array
+      dateWorkouts = dateWorkouts.map(item => item === w ? { ...item, ...payload, _editing: false, _draft: undefined } : item);
     } catch (e) {
       console.error(e);
       alert('Unable to update workout');
@@ -363,35 +380,43 @@
     dateWorkouts = [...dateWorkouts, newRow];
   }
 
-  async function saveNewDateWorkout(w) {
+  function saveNewDateWorkout(w) {
     if (!userId) { alert('No user'); return; }
     const target = dateWorkouts.find(item => item === w);
     if (!target || !target._draft) return;
+    
     try {
-      const res = await fetch(`${API_BASE}/workouts`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId, ...target._draft })
-      });
-      if (!res.ok) throw new Error('Create failed');
-      const created = await res.json();
-      dateWorkouts = dateWorkouts.map(item => item === w ? { ...item, ...created, _editing: false, _draft: undefined } : item);
+      const workoutData = {
+        id: workouts.length + 1,
+        user_id: userId,
+        ...target._draft,
+        created_at: new Date().toISOString()
+      };
+      
+      workouts = [...workouts, workoutData];
+      saveData();
+      
+      dateWorkouts = dateWorkouts.map(item => item === w ? { ...item, ...workoutData, _editing: false, _draft: undefined } : item);
     } catch (e) {
       console.error(e);
       alert('Unable to create workout');
     }
   }
 
-  async function removeDateWorkout(w) {
+  function removeDateWorkout(w) {
     // If it's a new unsaved row just drop it
-    if (!w.workout_id) {
+    if (!w.id) {
       dateWorkouts = dateWorkouts.filter(item => item !== w);
       return;
     }
     if (!confirm('Remove this workout?')) return;
+    
     try {
-      const res = await fetch(`${API_BASE}/workouts/${w.workout_id}`, { method:'DELETE' });
-      if (!res.ok) throw new Error('Delete failed');
+      // Remove from main workouts array
+      workouts = workouts.filter(workout => workout.id !== w.id);
+      saveData();
+      
+      // Remove from display array
       dateWorkouts = dateWorkouts.filter(item => item !== w);
     } catch (e) {
       console.error(e);
@@ -403,37 +428,31 @@
     exercises = [...exercises, { name: '', sets: 1, reps: 1, weight: '', editing: false, submitted: false, isTemplate: false }];
   }
 
-  async function saveAllExercises() {
+  function saveAllExercises() {
     if (!userId) { alert('Create a user first.'); return; }
-  const todayIso = localISO();
+    const todayIso = localISO();
+    
     for (let i=0;i<exercises.length;i++) {
       const ex = exercises[i];
       if (!ex.name.trim()) continue;
-      const payload = {
+      
+      const workoutData = {
+        id: workouts.length + 1,
         user_id: userId,
         exercise: ex.name.trim(),
         sets: ex.sets,
         reps: ex.reps,
         weight: ex.weight || null,
         body_part: workoutQuestion || 'General',
-        workout_date: todayIso
+        workout_date: todayIso,
+        created_at: new Date().toISOString()
       };
-      try {
-        if (ex.workout_id) {
-          const res = await fetch(`${API_BASE}/workouts/${ex.workout_id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-          if (!res.ok) throw new Error('Update failed');
-          const data = await res.json();
-          exercises[i] = { ...exercises[i], name:data.exercise, sets:data.sets, reps:data.reps, weight:data.weight };
-        } else {
-          const res = await fetch(`${API_BASE}/workouts`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-          if (!res.ok) throw new Error('Create failed');
-          const data = await res.json();
-          exercises[i] = { ...exercises[i], workout_id:data.workout_id };
-        }
-      } catch(e) {
-        console.error('Failed to save exercise', ex, e);
-      }
+      
+      workouts = [...workouts, workoutData];
+      exercises[i] = { ...exercises[i], workout_id: workoutData.id };
     }
+    
+    saveData();
   }
 
   function removeExercise(idx) {
@@ -445,6 +464,9 @@
   }
 
   onMount(() => {
+    // Load all data from localStorage
+    loadData();
+    
     const d = new Date();
     today = d.toLocaleDateString();
     // Simulate join date as today for now
@@ -466,29 +488,31 @@
     }
   });
 
-  async function submitName() {
+  function submitName() {
     if (!inputName.trim()) return;
     const nameValue = inputName.trim();
-    try {
-      const res = await fetch(`${API_BASE}/users`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: nameValue })
-      });
-      if (!res.ok) throw new Error('Failed to create user');
-      const data = await res.json();
-      userName = data.name;
-      userId = data.user_id;
-      localStorage.setItem('ft_user_id', userId);
-      localStorage.setItem('ft_user_name', userName);
-      inputName = '';
-      activeSeconds = 0;
-      clearInterval(activeInterval);
-      activeInterval = setInterval(() => { activeSeconds += 1; }, 1000);
-    } catch (e) {
-      console.error(e);
-      alert('Unable to save user. Is the backend running?');
+    
+    // Check if user already exists
+    let existingUser = users.find(u => u.name.toLowerCase() === nameValue.toLowerCase());
+    
+    if (existingUser) {
+      // Use existing user
+      userId = existingUser.id;
+      userName = existingUser.name;
+    } else {
+      // Create new user
+      userId = users.length + 1;
+      userName = nameValue;
+      users = [...users, { id: userId, name: userName, created_at: new Date().toISOString() }];
+      saveData();
     }
+    
+    localStorage.setItem('ft_user_id', userId);
+    localStorage.setItem('ft_user_name', userName);
+    inputName = '';
+    activeSeconds = 0;
+    clearInterval(activeInterval);
+    activeInterval = setInterval(() => { activeSeconds += 1; }, 1000);
   }
 
   function changeUser() {
@@ -876,7 +900,7 @@
                   <input class="inline-input" type="number" min="0" bind:value={w._draft.reps} />
                   <input class="inline-input" type="number" step="0.1" bind:value={w._draft.weight} />
                   <div class="actions">
-                    {#if w.workout_id}
+                    {#if w.id}
                       <button class="save-btn" on:click={() => saveEdit(w)}>Save</button>
                       <button class="cancel-btn" on:click={() => cancelEdit(w)}>Cancel</button>
                     {:else}
